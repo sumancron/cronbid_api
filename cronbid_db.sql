@@ -148,3 +148,49 @@ CREATE TABLE cronbid_brand_budgets (
     PRIMARY KEY (id),
     UNIQUE KEY (budget_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Inserting data into cronbid_campaigns
+INSERT INTO cronbid_campaigns (
+    campaign_id, brand, app_package_id, app_name, preview_url, description,
+    category, campaign_title, kpis, mmp, click_url, impression_url, deeplink,
+    creatives, events, payable, event_amount, campaign_budget, daily_budget,
+    monthly_budget, country, included_states, excluded_states, programmatic,
+    core_partners, direct_apps, oems, created_by, log_id, status
+) VALUES
+    ('campaign001', 'Brand A', 'com.app.a', 'App A', 'http://preview.com/a', 'Description of Campaign A',
+     'Category A', 'Campaign A Title', 'KPIs A', 'MMP A', 'http://click.com/a', 'http://impression.com/a', 'http://deeplink.com/a',
+     'Creative A', 'Event A', 1, 500.00, 1000.00, 100.00, 3000.00, 'USA', 'California, Texas', 'New York', 1,
+     'Partner A, Partner B', 'App1, App2', 'OEM A', 'user123', 'log001', 'active');
+
+-- Inserting data into cronbid_brands
+INSERT INTO cronbid_brands (
+    brand_id, company_name, brand_logo, country, state_region, city, address_line_1, address_line_2, zip_postal_code,
+    currency, first_name, last_name, contact, mobile, created_by, log_id, status
+) VALUES
+    ('brand001', 'Brand A Company', 'http://logo.com/a', 'USA', 'California', 'Los Angeles', '123 Main St', 'Suite 4', '90001',
+     'USD', 'John', 'Doe', 'john.doe@example.com', '+1234567890', 'user123', 'log001', 'active'),
+    ('brand002', 'Brand B Company', 'http://logo.com/b', 'USA', 'Texas', 'Houston', '456 Elm St', 'Apt 9', '77001',
+     'USD', 'Jane', 'Smith', 'jane.smith@example.com', '+0987654321', 'user123', 'log002', 'active');
+
+-- Inserting data into cronbid_campaigns_logs
+INSERT INTO cronbid_logs (
+    log_id, action, table_name, record_id, user_id, username, action_description, created_at
+) VALUES
+    ('log001', 'create', 'cronbid_campaigns', '1', 'user123', 'john_doe', 'Created Campaign A', CURRENT_TIMESTAMP),
+    ('log002', 'update', 'cronbid_campaigns', '1', 'user123', 'john_doe', 'Updated Campaign A', CURRENT_TIMESTAMP),
+    ('log003', 'delete', 'cronbid_campaigns', '2', 'user123', 'john_doe', 'Deleted Campaign B', CURRENT_TIMESTAMP);
+
+-- Inserting data into cronbid_user_funds
+INSERT INTO cronbid_user_funds (
+    fund_id, user_id, total_funds, funds_added, funds_used, remaining_funds, created_by, log_id, status
+) VALUES
+    ('fund001', 'user123', 5000.00, 5000.00, 1000.00, 4000.00, 'user123', 'log001', 'active'),
+    ('fund002', 'user123', 2000.00, 2000.00, 500.00, 1500.00, 'user123', 'log002', 'active');
+
+-- Inserting data into cronbid_brand_budgets
+INSERT INTO cronbid_brand_budgets (
+    budget_id, user_id, brand_id, allocated_budget, daily_budget, monthly_budget, remaining_budget, created_at, updated_at
+) VALUES
+    ('budget001', 'user123', 'brand001', 1000.00, 100.00, 3000.00, 800.00, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('budget002', 'user123', 'brand002', 2000.00, 150.00, 4500.00, 1700.00, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

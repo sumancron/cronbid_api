@@ -3,7 +3,7 @@ from services.authapis.register_service import handle_register_user
 
 router = APIRouter()
 
-@router.get("/register")
+@router.post("/register")
 async def register_user():
     try:
         result = await handle_register_user()
