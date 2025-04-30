@@ -8,7 +8,8 @@ app.title = "Cronbid API"
 
 # CORS setup
 origins = [
-    "http://localhost:5173",  # your Vite + React frontend
+    "http://localhost:5173",  
+    "https://ads.cronbid.com",  
 ]
 
 app.add_middleware(
