@@ -10,7 +10,7 @@ def include_all_routes(app: FastAPI):
     app.include_router(authentication.router, prefix="/authentication", tags=["authentication"])
     app.include_router(app_details_route.router, prefix="/app-details", tags=["App Details"])
     app.include_router(get_tables.router, prefix="/get-tables", tags=["Get Tables"])
-    app.include_router(brands.router, prefix="/brands", tags=["Get Tables"])
+    app.include_router(brands.router, prefix="/brands", tags=["brands"])
     app.include_router(campaigns.router, prefix="/campaigns", tags=["Campaigns"])
     # app.include_router(funds.router, prefix="/funds", tags=["Funds"])
     # app.include_router(reports.router, prefix="/reports", tags=["Reports"])
