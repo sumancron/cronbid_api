@@ -5,7 +5,7 @@ import aiomysql
 
 router = APIRouter()
 
-@router.get("/brands/", dependencies=[Depends(verify_api_key)])
+@router.get("/get_brands/", dependencies=[Depends(verify_api_key)])
 async def get_brands():
     try:
         pool = await Database.connect()
