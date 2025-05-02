@@ -1,16 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import include_all_routes  # your router handler
-from database import Database  # direct import from same folder
+from contextlib import asynccontextmanager
+from routes import include_all_routes
+from database import Database
 
-app = FastAPI(debug=True)
-app.title = "Cronbid API"
-
-# CORS setup
 origins = [
-    "http://localhost:5173",  
-    "https://ads.cronbid.com",  
+    "https://ads.cronbid.com",  # no trailing slash
 ]
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await Database.connect()
+    yield
+    await Database.close()
+
+app = FastAPI(
+    title="Cronbid API",
+    debug=True,
+    lifespan=lifespan
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,16 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Startup and shutdown DB lifecycle
-@app.on_event("startup")
-async def startup():
-    await Database.connect()
-
-@app.on_event("shutdown")
-async def shutdown():
-    await Database.close()
-
-# Include your API routes
 include_all_routes(app)
 
 @app.get("/")
