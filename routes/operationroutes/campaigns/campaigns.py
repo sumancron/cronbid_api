@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import Database
-from auth import verify_api_key
+# from auth import verify_api_key
 import aiomysql
 
 router = APIRouter()
 
-@router.get("", dependencies=[Depends(verify_api_key)])
+@router.get("")
 async def get_campaigns():
     try:
         pool = await Database.connect()
