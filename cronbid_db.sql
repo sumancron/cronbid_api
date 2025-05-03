@@ -136,15 +136,15 @@ CREATE TABLE cronbid_user_funds (
 
 CREATE TABLE cronbid_brand_budgets (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    budget_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,  -- Reference to the user who allocated the budget
+    budget_id VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,  -- Reference to the user who allocated the budget
     brand_id VARCHAR(255) NOT NULL,  -- Reference to the brand
-    allocated_budget DECIMAL(15,2) DEFAULT 0.00,  -- Total budget allocated to the brand
-    daily_budget DECIMAL(15,2) DEFAULT 0.00,      -- Daily budget for the brand
-    monthly_budget DECIMAL(15,2) DEFAULT 0.00,    -- Monthly budget for the brand
-    remaining_budget DECIMAL(15,2) DEFAULT 0.00,   -- Remaining budget allocated to the brand
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,  -- Timestamp when the budget was allocated
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,  -- Last updated timestamp
+    allocated_budget DECIMAL(15,2) DEFAULT 0.00,
+    daily_budget DECIMAL(15,2) DEFAULT 0.00,
+    monthly_budget DECIMAL(15,2) DEFAULT 0.00,
+    remaining_budget DECIMAL(15,2) DEFAULT 0.00,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY (budget_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
