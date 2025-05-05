@@ -12,7 +12,7 @@ async def get_brands():
         async with pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute("SELECT * FROM cronbid_brands")
-                rows = await cur.fetchall()
+                rows = await cur.fetchall()     
         return {"brands": rows}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

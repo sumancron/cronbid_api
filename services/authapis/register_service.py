@@ -2,6 +2,7 @@ from fastapi import Request, HTTPException
 from database import Database
 from utils.id_generator import generate_custom_id
 from utils.security import hash_password
+from utils.send_auth_mails import send_user_confirmation_email, send_admin_user_alert
 
 async def handle_register_user(request: Request):
     data = await request.json()
@@ -25,7 +26,7 @@ async def handle_register_user(request: Request):
     is_company = bool(data.get("isCompany", False))
     terms_accepted = bool(data.get("termsAccepted", False))
 
-    required_fields = [first_name, last_name, email, password, country]
+    required_fields = [first_name, email, password, country]
     if not all(required_fields):
         raise HTTPException(status_code=400, detail="Missing required fields.")
 
@@ -60,5 +61,33 @@ async def handle_register_user(request: Request):
                 additional_email, address, country, phone, skype, referrer_email,
                 hashed_password, is_company, terms_accepted
             ))
+
+    # Send confirmation email to user
+    try:
+        send_user_confirmation_email(email, first_name)
+    except Exception as e:
+        print(f"[Email Error] Failed to send confirmation email to user: {e}")
+
+    # Send alert email to admin
+    try:
+        user_info = {
+            "user_id": user_id,
+            "first_name": first_name,
+            "last_name": last_name,
+            "company_name": company_name,
+            "tax_id": tax_id,
+            "email": email,
+            "additional_email": additional_email,
+            "address": address,
+            "country": country,
+            "phone": phone,
+            "skype": skype,
+            "referrer_email": referrer_email,
+            "is_company": is_company,
+            "terms_accepted": terms_accepted
+        }
+        send_admin_user_alert(user_info)
+    except Exception as e:
+        print(f"[Email Error] Failed to send admin alert email: {e}")
 
     return {"message": "User registered successfully", "user_id": user_id}

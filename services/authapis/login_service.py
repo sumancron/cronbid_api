@@ -50,6 +50,13 @@ async def handle_login_user(request: Request):
             detail="Invalid email or password."
         )
 
+    # ❗️ New condition added to restrict inactive users
+    if is_active != 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is not yet activated."
+        )
+
     token_payload = {
         "user_id": user_id,
         "email": email
