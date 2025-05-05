@@ -5,7 +5,7 @@ from routes import include_all_routes
 from database import Database
 
 origins = [
-    "http://localhost:5173",  # no trailing slash
+    "https://ads.cronbid.com",  # no trailing slash
 ]
 
 @asynccontextmanager
