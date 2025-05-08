@@ -4,7 +4,7 @@ from auth import verify_api_key
 import uuid
 import re
 import base64
-
+from utils.file_handler import save_brand_logo
 from utils.logger import generate_log_id, insert_log_entry
 
 router = APIRouter()
@@ -42,17 +42,18 @@ async def post_brand(request: Request):
     brand_id = generate_brand_id()
     log_id = generate_log_id()
 
-    # Ensure that the brand_logo is base64 encoded and properly formatted
+    # Handle brand logo
+    brand_logo_path = None
     brand_logo = data.get("brand_logo")
     if brand_logo:
-        # Check if it's a valid base64 string (basic check, you may want to improve this)
+        # Check if it's a valid base64 string
         if not brand_logo.startswith("data:image"):
             raise HTTPException(status_code=400, detail="Invalid base64 image data for brand_logo.")
         try:
-            # Decode base64 to ensure it's valid (if needed for future use)
-            decoded_logo = base64.b64decode(brand_logo.split(",")[1])
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid base64 encoding for brand_logo.")
+            # Save the image and get its path
+            brand_logo_path = save_brand_logo(brand_id, brand_logo)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error saving brand logo: {str(e)}")
 
     pool = await Database.connect()
     if pool is None:
@@ -77,7 +78,7 @@ async def post_brand(request: Request):
             """, (
                 brand_id,
                 data.get("company_name"),
-                brand_logo,  # Store the base64 string
+                brand_logo_path,  # Store the file path instead of base64
                 data.get("country"),
                 data.get("state_region"),
                 data.get("city"),
