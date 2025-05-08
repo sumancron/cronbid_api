@@ -2,9 +2,9 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-APP_PASSWORD = "vlmx lbff rsvo llvr"
-SENDER_EMAIL = "suman@cronbaytechnologies.com"
-ADMIN_EMAIL = "suman@cronbaytechnologies.com"
+APP_PASSWORD = "dcfl kybe tokq ydyv"
+SENDER_EMAIL = "admin@cronbid.com"
+ADMIN_EMAIL = "admin@cronbid.com"
 APP_NAME = "CRONBID"
 LOGO_URL = "https://ads.cronbid.com/cronbaylogo.png"
 
@@ -38,7 +38,7 @@ def send_admin_user_alert(user_data: dict):
         <ul>
             {''.join(f"<li><strong>{key.replace('_', ' ').capitalize()}</strong>: {value}</li>" for key, value in user_data.items())}
         </ul>
-        <p><strong>Action Needed:</strong> Review and activate or reject this user in the admin panel.</p>
+        <p><strong>Action Needed:</strong> Review and activate or reject this user in the admin panel. <a href="https://ads.cronbid.com/dashboard/users">USERS MANAGEMENT SECTION</a> </p>
     </body>
     </html>
     """

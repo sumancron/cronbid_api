@@ -32,9 +32,9 @@ async def fetch_table_data(
 
 
 
-APP_PASSWORD = "vlmx lbff rsvo llvr"
-SENDER_EMAIL = "suman@cronbaytechnologies.com"
-ADMIN_EMAIL = "suman@cronbaytechnologies.com"
+APP_PASSWORD = "dcfl kybe tokq ydyv"
+SENDER_EMAIL = "admin@cronbid.com"
+ADMIN_EMAIL = "admin@cronbid.com"
 APP_NAME = "CRONBID"
 LOGO_URL = "https://ads.cronbid.com/cronbaylogo.png"
 
@@ -43,6 +43,8 @@ def send_activation_email(to_email: str, is_active: bool):
     bg_color = "#d4edda" if is_active else "#f8d7da"
     text_color = "#155724" if is_active else "#721c24"
     status_text = "activated ✅" if is_active else "deactivated ❌"
+    support_text = "You can login now, to get to login page click this link. <a href='https://ads.cronbid.com/'>ads.cronbid.com</a>" if is_active else "contact support for more information. <a href='mailto:{ADMIN_EMAIL}'> {ADMIN_EMAIL}</a>"
+    
 
     html_content = f"""
     <html>
@@ -52,7 +54,7 @@ def send_activation_email(to_email: str, is_active: bool):
             <h2>Your account has been {status_text}</h2>
             <p>Dear User,</p>
             <p>Your account on <strong>{APP_NAME}</strong> has been <strong>{status_text}</strong>.</p>
-            <p>If you have any questions, please contact support.</p>
+            <p> {support_text} </p>
         </div>
     </body>
     </html>
