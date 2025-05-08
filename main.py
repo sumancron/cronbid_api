@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from routes import include_all_routes
 from database import Database
 
 origins = [
-    "https://ads.cronbid.com",  # no trailing slash
+      "https://ads.cronbid.com", # no trailing slash
 ]
 
 @asynccontextmanager
@@ -29,6 +30,8 @@ app.add_middleware(
 )
 
 include_all_routes(app)
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/")
 async def read_root():
