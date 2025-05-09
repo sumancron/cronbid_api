@@ -111,43 +111,37 @@ CREATE TABLE cronbid_logs (
     UNIQUE KEY (log_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-
 -- Table: cronbid_user_funds
 
 CREATE TABLE cronbid_user_funds (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    fund_id varchar(255) NOT NULL,
-    user_id TEXT NOT NULL,  -- Reference to the user
-    total_funds DECIMAL(15,2) DEFAULT 0.00,  -- Total funds added to the user's account
-    funds_added DECIMAL(15,2) DEFAULT 0.00,  -- Funds added during the current transaction
-    funds_used DECIMAL(15,2) DEFAULT 0.00,   -- Funds already used from the account
-    remaining_funds DECIMAL(15,2) DEFAULT 0.00,  -- Remaining funds available
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,  -- Timestamp of when the fund entry was created
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,  -- Timestamp of the last update
-    created_by VARCHAR(100) DEFAULT NULL,
-    log_id VARCHAR(100) DEFAULT NULL,
-    status ENUM('active','inactive') DEFAULT 'active',
-    PRIMARY KEY (id),
-    UNIQUE KEY (fund_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-
--- Table: cronbid_brand_budgets
-
-CREATE TABLE cronbid_brand_budgets (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    budget_id VARCHAR(255) NOT NULL,
-    user_id VARCHAR(255) NOT NULL,  -- Reference to the user who allocated the budget
-    brand_id VARCHAR(255) NOT NULL,  -- Reference to the brand
-    allocated_budget DECIMAL(15,2) DEFAULT 0.00,
-    daily_budget DECIMAL(15,2) DEFAULT 0.00,
-    monthly_budget DECIMAL(15,2) DEFAULT 0.00,
-    remaining_budget DECIMAL(15,2) DEFAULT 0.00,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    fund_id VARCHAR(150),
+    user_id VARCHAR(150),
+    user_name VARCHAR(255),
+    fund DECIMAL(10,2),
+    currency VARCHAR(10) DEFAULT 'USD',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (id),
-    UNIQUE KEY (budget_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    created_by VARCHAR(255),
+    last_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Table: cronbid_fund_transactions
+CREATE TABLE cronbid_fund_transactions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    transaction_id VARCHAR(150),
+    user_id VARCHAR(150),
+    user_name VARCHAR(255),
+    currency VARCHAR(10) DEFAULT 'USD',
+    amount DECIMAL(10,2),
+    type ENUM('credit', 'debit'),
+    description TEXT,
+    balance_after_transaction DECIMAL(10,2),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255),
+    last_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+
 
 
 -- Inserting data into cronbid_campaigns
@@ -180,17 +174,3 @@ INSERT INTO cronbid_logs (
     ('log001', 'create', 'cronbid_campaigns', '1', 'user123', 'john_doe', 'Created Campaign A', CURRENT_TIMESTAMP),
     ('log002', 'update', 'cronbid_campaigns', '1', 'user123', 'john_doe', 'Updated Campaign A', CURRENT_TIMESTAMP),
     ('log003', 'delete', 'cronbid_campaigns', '2', 'user123', 'john_doe', 'Deleted Campaign B', CURRENT_TIMESTAMP);
-
--- Inserting data into cronbid_user_funds
-INSERT INTO cronbid_user_funds (
-    fund_id, user_id, total_funds, funds_added, funds_used, remaining_funds, created_by, log_id, status
-) VALUES
-    ('fund001', 'user123', 5000.00, 5000.00, 1000.00, 4000.00, 'user123', 'log001', 'active'),
-    ('fund002', 'user123', 2000.00, 2000.00, 500.00, 1500.00, 'user123', 'log002', 'active');
-
--- Inserting data into cronbid_brand_budgets
-INSERT INTO cronbid_brand_budgets (
-    budget_id, user_id, brand_id, allocated_budget, daily_budget, monthly_budget, remaining_budget, created_at, updated_at
-) VALUES
-    ('budget001', 'user123', 'brand001', 1000.00, 100.00, 3000.00, 800.00, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('budget002', 'user123', 'brand002', 2000.00, 150.00, 4500.00, 1700.00, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
