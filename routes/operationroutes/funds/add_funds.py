@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from decimal import Decimal, InvalidOperation
 from database import Database
@@ -22,7 +22,7 @@ LOGO_URL = "https://ads.cronbid.com/cronbaylogo.png"
 class FundRequest(BaseModel):
     user_id: str = Field(..., min_length=3)
     user_name: str = Field(..., min_length=1)
-    fund: str = Field(..., min_length=1)
+    fund: Decimal = Field(..., gt=0, description="Amount to be added as funds")  
     created_by: str = Field(..., min_length=1)
     email: str = Field(..., min_length=5)
 
@@ -50,10 +50,10 @@ def send_fund_email(to_email: str, user_name: str, amount: str, balance: str, tr
                             <td style="padding: 0 40px 20px; text-align: center;">
                                 <h2 style="color: #1a2671;">Hi {user_name},</h2>
                                 <p style="font-size: 16px; color: #333333;">
-                                    Your account has been <strong style="color: #1a2671;">{transaction_type}ed</strong> with <strong style="color: #1a2671;">INR {amount}</strong>.
+                                    Your account has been <strong style="color: #1a2671;">{transaction_type}ed</strong> with <strong style="color: #1a2671;">USD {amount}</strong>.
                                 </p>
                                 <p style="font-size: 16px; color: #333333;">
-                                    Your updated balance is <strong style="color: #1a2671;">INR {balance}</strong>.
+                                    Your updated balance is <strong style="color: #1a2671;">USD {balance}</strong>.
                                 </p>
                                 <p style="font-size: 15px; color: #777777; margin-top: 30px;">
                                     Thank you for using <strong>{APP_NAME}</strong>.
@@ -99,7 +99,7 @@ async def post_funds(payload: FundRequest):
 
         fund_id = generate_clean_id("fund")
         transaction_id = generate_clean_id("txn")
-        currency = "INR"
+        currency = "USD"
         current_time = datetime.datetime.now()
 
         pool = await Database.connect()
@@ -117,7 +117,7 @@ async def post_funds(payload: FundRequest):
                     new_fund = current_fund + fund_amount
                     await cur.execute("""
                         UPDATE cronbid_user_funds
-                        SET fund = %s, updated_at = %s
+                        SET fund = %s, last_updated_at = %s
                         WHERE user_id = %s
                     """, (new_fund, current_time, payload.user_id))
                 else:
