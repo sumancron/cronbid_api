@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from database import Database
 from auth import verify_api_key
 import aiomysql
+import time
 from typing import Optional
 
 router = APIRouter()
@@ -34,10 +35,15 @@ async def get_brands(
             filters.append("created_by = %s")
             values.append(created_by)
 
-        # Base query
         query = "SELECT * FROM cronbid_brands"
         if filters:
             query += " WHERE " + " AND ".join(filters)
+
+        # Debug: print the query and values
+        print("\n[DEBUG] Executing Query:", query)
+        print("[DEBUG] With Values:", values)
+
+        start_time = time.time()
 
         pool = await Database.connect()
         async with pool.acquire() as conn:
@@ -45,7 +51,11 @@ async def get_brands(
                 await cur.execute(query, values)
                 rows = await cur.fetchall()
 
+        end_time = time.time()
+        print(f"[DEBUG] Query Execution Time: {round((end_time - start_time)*1000, 2)} ms")
+
         return {"brands": rows}
 
     except Exception as e:
+        print("[ERROR] Exception occurred while fetching brands:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
