@@ -15,8 +15,8 @@ class Database:
                 password=settings.db_password,
                 db=settings.db_name,
                 autocommit=True,
-                minsize=1,
-                maxsize=10
+                minsize=20,
+                maxsize=100
             )
         return cls.pool
 
