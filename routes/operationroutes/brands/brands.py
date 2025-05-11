@@ -2,13 +2,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from database import Database
-from auth import verify_api_key
+# from auth import verify_api_key
 import aiomysql
 from typing import Optional
 
 router = APIRouter()
 
-@router.get("/get_brands", dependencies=[Depends(verify_api_key)])
+@router.get("/get_brands/")
 async def get_brands(
     country: Optional[str] = Query(None),
     state_region: Optional[str] = Query(None),
