@@ -1,5 +1,5 @@
 # app/routes/database_routes.py
-from fastapi import APIRouter, Request, Header, HTTPException
+from fastapi import APIRouter, Request, Header, HTTPException, Body
 from database import Database
 # from config import settings
 import smtplib
@@ -29,6 +29,35 @@ async def fetch_table_data(
                 raise HTTPException(status_code=500, detail=str(e))
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Error fetching data from table `{table_name}`: {str(e)}")
+            
+
+
+@router.delete("/delete_rows/")
+async def delete_row(
+    table_name: str = Body(...),
+    primary_field: str = Body(...),
+    row_id: str = Body(...),
+    x_api_key: str = Header(None)
+):
+    if x_api_key != "jdfjdhfjdhbfjdhfjhdjjhbdj":
+        raise HTTPException(status_code=403, detail="Invalid or missing API key")
+
+    pool = await Database.connect()
+
+    async with pool.acquire() as conn:
+        async with conn.cursor() as cur:
+            try:
+                query = f"DELETE FROM `{table_name}` WHERE `{primary_field}` = %s"
+                await cur.execute(query, (row_id,))
+                await conn.commit()
+                if cur.rowcount == 0:
+                    raise HTTPException(status_code=404, detail="Row not found or already deleted")
+                return {"status": "success", "message": f"Row with {primary_field}={row_id} deleted from {table_name}"}
+            except aiomysql.MySQLError as e:
+                raise HTTPException(status_code=500, detail=str(e))
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Error deleting row: {str(e)}")
+
 
 
 
