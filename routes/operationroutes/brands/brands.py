@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("/get_brands/", dependencies=[Depends(verify_api_key)])
 async def get_brands(
-    id: Optional[str] = Query(None),
+    brand_id: Optional[str] = Query(None),
     country: Optional[str] = Query(None),
     state_region: Optional[str] = Query(None),
     city: Optional[str] = Query(None),
@@ -19,9 +19,9 @@ async def get_brands(
         filters = []
         values = []
 
-        if id:
-            filters.append("id = %s")
-            values.append(id)
+        if brand_id:
+            filters.append("brand_id = %s")
+            values.append(brand_id)
         if country:
             filters.append("country = %s")
             values.append(country)
