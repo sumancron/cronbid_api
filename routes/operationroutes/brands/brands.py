@@ -1,15 +1,14 @@
-# cronbid_api/routes/operationroutes/brands/brands.py
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from database import Database
-# from auth import verify_api_key
+from auth import verify_api_key
 import aiomysql
 from typing import Optional
 
 router = APIRouter()
 
-@router.get("/get_brands/")
+@router.get("/get_brands/", dependencies=[Depends(verify_api_key)])
 async def get_brands(
+    id: Optional[str] = Query(None),
     country: Optional[str] = Query(None),
     state_region: Optional[str] = Query(None),
     city: Optional[str] = Query(None),
@@ -20,6 +19,9 @@ async def get_brands(
         filters = []
         values = []
 
+        if id:
+            filters.append("id = %s")
+            values.append(id)
         if country:
             filters.append("country = %s")
             values.append(country)
@@ -36,7 +38,6 @@ async def get_brands(
             filters.append("created_by = %s")
             values.append(created_by)
 
-        # Base query
         query = "SELECT * FROM cronbid_brands"
         if filters:
             query += " WHERE " + " AND ".join(filters)
