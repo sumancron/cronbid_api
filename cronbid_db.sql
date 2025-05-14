@@ -65,7 +65,20 @@ CREATE TABLE cronbid_campaigns (
     INDEX idx_created_by (created_by)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Remove old columns and add JSON targeting column
+ALTER TABLE cronbid_campaigns
+DROP COLUMN country,
+DROP COLUMN included_states,
+DROP COLUMN excluded_states,
+ADD COLUMN targeting JSON DEFAULT NULL;
 
+-- Add index for faster JSON queries
+ALTER TABLE cronbid_campaigns ADD INDEX idx_targeting (targeting(255));
+
+-- Modify brand column comment for clarity
+ALTER TABLE cronbid_campaigns 
+MODIFY COLUMN brand VARCHAR(255) 
+COMMENT 'Stores brand ID from general.brandId';
 
 -- Table: cronbid_brands
 
@@ -174,3 +187,7 @@ INSERT INTO cronbid_logs (
     ('log001', 'create', 'cronbid_campaigns', '1', 'user123', 'john_doe', 'Created Campaign A', CURRENT_TIMESTAMP),
     ('log002', 'update', 'cronbid_campaigns', '1', 'user123', 'john_doe', 'Updated Campaign A', CURRENT_TIMESTAMP),
     ('log003', 'delete', 'cronbid_campaigns', '2', 'user123', 'john_doe', 'Deleted Campaign B', CURRENT_TIMESTAMP);
+
+
+
+

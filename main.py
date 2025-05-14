@@ -6,7 +6,7 @@ from routes import include_all_routes
 from database import Database
 
 origins = [
-      "https://ads.cronbid.com", # no trailing slash
+      "https://ads.cronbid.com",
 ]
 
 @asynccontextmanager
@@ -32,6 +32,7 @@ app.add_middleware(
 include_all_routes(app)
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/campaignsmedia", StaticFiles(directory="uploads/campaignsmedia"), name="campaignsmedia")
 
 @app.get("/")
 async def read_root():
