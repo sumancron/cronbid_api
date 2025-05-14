@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from .authroutes import authentication
 from .serviceroutes import app_details_route,get_tables
 from .operationroutes.brands import brands, add_brands, update_brands
-from .operationroutes.campaigns import add_campaigns, campaigns, campaign_status
+from .operationroutes.campaigns import add_campaigns, campaigns, campaign_status, update_campaigns
 from .operationroutes.funds import funds,add_funds
 
 # campaigns, funds, reports, settings, dashboard, auth, external_apis
@@ -23,6 +23,7 @@ def include_all_routes(app: FastAPI):
     app.include_router(campaigns.router, prefix="/campaigns", tags=["Campaigns"])
     app.include_router(add_campaigns.router, prefix="/add_campaigns", tags=["add_campaigns"])
     app.include_router(campaign_status.router, prefix="/campaign_status", tags=["Campaign Status"])
+    app.include_router(update_campaigns.router, prefix="/update_campaigns", tags=["Update Campaigns"])
     
     #FUNDS RELATED ROUTES
     app.include_router(funds.router, prefix="/funds", tags=["Funds"])
