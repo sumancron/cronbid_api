@@ -77,6 +77,14 @@ ALTER TABLE cronbid_campaigns
 MODIFY COLUMN brand VARCHAR(255) 
 COMMENT 'Stores brand ID from general.brandId';
 
+ALTER TABLE cronbid_campaigns
+DROP COLUMN programmatic,
+DROP COLUMN core_partners,
+DROP COLUMN direct_apps,
+DROP COLUMN oems,
+ADD COLUMN source JSON DEFAULT NULL AFTER targeting;
+
+
 -- Table: cronbid_brands
 
 CREATE TABLE cronbid_brands (
@@ -160,9 +168,10 @@ source_id VARCHAR(100) NOT NULL,
 name VARCHAR(255) NOT NULL,
 category VARCHAR(100),
 type VARCHAR(100),
-logo TEXT
+logo TEXT,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
-
 -- Inserting data into cronbid_campaigns
 INSERT INTO cronbid_campaigns (
     campaign_id, brand, app_package_id, app_name, preview_url, description,
