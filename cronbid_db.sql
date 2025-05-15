@@ -72,9 +72,6 @@ DROP COLUMN included_states,
 DROP COLUMN excluded_states,
 ADD COLUMN targeting JSON DEFAULT NULL;
 
--- Add index for faster JSON queries
-ALTER TABLE cronbid_campaigns ADD INDEX idx_targeting (targeting(255));
-
 -- Modify brand column comment for clarity
 ALTER TABLE cronbid_campaigns 
 MODIFY COLUMN brand VARCHAR(255) 
@@ -154,8 +151,17 @@ CREATE TABLE cronbid_fund_transactions (
     last_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+-- Table: cronbid_sources
+-- This table stores information about different sources for campaigns
 
-
+CREATE TABLE cronbid_sources (
+id INT AUTO_INCREMENT PRIMARY KEY,
+source_id VARCHAR(100) NOT NULL,
+name VARCHAR(255) NOT NULL,
+category VARCHAR(100),
+type VARCHAR(100),
+logo TEXT
+);
 
 -- Inserting data into cronbid_campaigns
 INSERT INTO cronbid_campaigns (

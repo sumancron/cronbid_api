@@ -172,13 +172,13 @@ async def post_campaign(request: Request):
         data = await request.json()
         sanitize_input(data)  # Perform recursive sanitization
 
-        # Extract user and campaign info
+        # Extract basic info
         user_id = data.get("user_id", "unknown")
         user_name = data.get("user_name", "Unknown User")
         campaign_id = f"CRB-{int(datetime.utcnow().timestamp())}-{uuid.uuid4().hex[:6]}"
         log_id = generate_log_id()
 
-        # Process media files
+        # Save media files
         creatives = await save_media_files(
             data.get("creatives", {}),
             user_id,
@@ -188,7 +188,10 @@ async def post_campaign(request: Request):
         # Process targeting data
         targeting_data = process_targeting_data(data.get("targeting", {}))
 
-        # Build database values
+        # Full source JSON as string
+        source_json = json.dumps(data.get("source", {}))
+
+        # Prepare DB values
         values = (
             campaign_id,
             data.get("general", {}).get("brandId"),
@@ -211,35 +214,29 @@ async def post_campaign(request: Request):
             data.get("budget", {}).get("dailyBudget", 0),
             data.get("budget", {}).get("monthlyBudget", 0),
             json.dumps(targeting_data),
-            1 if data.get("source", {}).get("programmaticEnabled") else 0,
-            json.dumps(data.get("source", {}).get("selectedApps", {})),
-            1 if data.get("source", {}).get("expandedCategories", {}).get("directApps") else 0,
-            1 if data.get("source", {}).get("expandedCategories", {}).get("oem") else 0,
+            source_json,
             user_id,
             log_id
         )
 
-        # SQL Query
         query = """
         INSERT INTO cronbid_campaigns (
             campaign_id, brand, app_package_id, app_name, preview_url, description,
             category, campaign_title, kpis, mmp, click_url, impression_url, deeplink,
             creatives, events, payable, event_amount,
             campaign_budget, daily_budget, monthly_budget, targeting,
-            programmatic, core_partners, direct_apps, oems,
-            created_by, log_id
+            source, created_by, log_id
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                   %s, %s, %s, %s,
                   %s, %s, %s, %s,
-                  %s, %s, %s, %s,
-                  %s, %s)
+                  %s, %s, %s)
         """
 
-        # Database execution
         pool = await Database.connect()
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(query, values)
+
                 await insert_log_entry(
                     conn=conn,
                     action="create",
@@ -265,3 +262,5 @@ async def post_campaign(request: Request):
             status_code=500,
             detail=f"Campaign creation failed: {str(e)}"
         )
+        
+        

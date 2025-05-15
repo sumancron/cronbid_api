@@ -139,69 +139,72 @@ def process_targeting_data(targeting: dict) -> list:
 @router.put("/update_campaign/{campaign_id}", dependencies=[Depends(verify_api_key)])
 async def update_campaign(campaign_id: str, request: Request):
     try:
-        print(f"[DEBUG] Updating campaign: {campaign_id}")
+        # 1) Read & sanitize
         data = await request.json()
-        print(f"[DEBUG] Payload received: {json.dumps(data, indent=2)}")
-
         sanitize_input(data)
-        user_id = data.get("user_id", "unknown")
-        user_name = data.get("user_name", "Unknown User")
-        log_id = generate_log_id()
 
+        # 2) Identify user & log
+        user_id   = data.get("user_id", "unknown")
+        user_name = data.get("user_name", "Unknown User")
+        log_id    = generate_log_id()
+
+        # 3) Connect & fetch existing
         pool = await Database.connect()
         async with pool.acquire() as conn:
-            existing_campaign = await get_existing_campaign(campaign_id, conn)
-            existing_creatives = json.loads(existing_campaign.get("creatives", "[]"))
+            existing = await get_existing_campaign(campaign_id, conn)
+            old_creatives = json.loads(existing.get("creatives", "[]"))
 
+            # 4) Save any new media
             creatives = await save_media_files(
                 data.get("creatives", {}),
                 user_id,
                 campaign_id,
-                existing_creatives
+                old_creatives
             )
 
-            targeting_data = process_targeting_data(data.get("targeting", []))
+            # 5) Re‑process targeting
+            targeting_data = process_targeting_data(data.get("targeting", {}))
 
-            values = {
-                "brand": data.get("general", {}).get("brandId"),
-                "app_package_id": data.get("appDetails", {}).get("packageId"),
-                "app_name": data.get("appDetails", {}).get("appName"),
-                "preview_url": data.get("appDetails", {}).get("previewUrl"),
-                "description": data.get("appDetails", {}).get("description"),
-                "category": data.get("campaignDetails", {}).get("category"),
-                "campaign_title": data.get("campaignDetails", {}).get("campaignTitle"),
-                "kpis": data.get("campaignDetails", {}).get("kpis"),
-                "mmp": data.get("campaignDetails", {}).get("mmp"),
-                "click_url": data.get("campaignDetails", {}).get("clickUrl"),
-                "impression_url": data.get("campaignDetails", {}).get("impressionUrl"),
-                "deeplink": data.get("campaignDetails", {}).get("deeplink"),
-                "creatives": json.dumps(creatives.get("files", [])),
-                "events": json.dumps(data.get("conversionFlow", {}).get("events", [])),
-                "payable": 1 if data.get("conversionFlow", {}).get("selectedPayable") else 0,
-                "event_amount": data.get("conversionFlow", {}).get("amount", 0),
-                "campaign_budget": data.get("budget", {}).get("campaignBudget", 0),
-                "daily_budget": data.get("budget", {}).get("dailyBudget", 0),
-                "monthly_budget": data.get("budget", {}).get("monthlyBudget", 0),
-                "targeting": json.dumps(targeting_data),
-                "programmatic": 1 if data.get("source", {}).get("programmaticEnabled") else 0,
-                "core_partners": json.dumps(data.get("source", {}).get("selectedApps", {})),
-                "direct_apps": 1 if data.get("source", {}).get("expandedCategories", {}).get("directApps") else 0,
-                "oems": 1 if data.get("source", {}).get("expandedCategories", {}).get("oem") else 0,
-                "created_by": user_id,
-                "created_at": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
-                "log_id": log_id
+            # 6) Build the full `source` JSON
+            source_json = json.dumps(data.get("source", {}))
+
+            # 7) Prepare all fields to update
+            to_update = {
+                "brand":           data["general"].get("brandId"),
+                "app_package_id":  data["appDetails"].get("packageId"),
+                "app_name":        data["appDetails"].get("appName"),
+                "preview_url":     data["appDetails"].get("previewUrl"),
+                "description":     data["appDetails"].get("description"),
+                "category":        data["campaignDetails"].get("category"),
+                "campaign_title":  data["campaignDetails"].get("campaignTitle"),
+                "kpis":            data["campaignDetails"].get("kpis"),
+                "mmp":             data["campaignDetails"].get("mmp"),
+                "click_url":       data["campaignDetails"].get("clickUrl"),
+                "impression_url":  data["campaignDetails"].get("impressionUrl"),
+                "deeplink":        data["campaignDetails"].get("deeplink"),
+                "creatives":       json.dumps(creatives.get("files", [])),
+                "events":          json.dumps(data["conversionFlow"].get("events", [])),
+                "payable":         int(bool(data["conversionFlow"].get("selectedPayable"))),
+                "event_amount":    data["conversionFlow"].get("amount", 0),
+                "campaign_budget": data["budget"].get("campaignBudget", 0),
+                "daily_budget":    data["budget"].get("dailyBudget", 0),
+                "monthly_budget":  data["budget"].get("monthlyBudget", 0),
+                "targeting":       json.dumps(targeting_data),
+                "source":          source_json,
+                "created_by":      user_id,
+                "updated_at":      datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                "log_id":          log_id
             }
 
-            set_clause = ", ".join([f"{k} = %s" for k in values])
-            query = f"UPDATE cronbid_campaigns SET {set_clause} WHERE campaign_id = %s"
-
-            print(f"[DEBUG] SQL Query: {query}")
-            print(f"[DEBUG] SQL Params: {list(values.values()) + [campaign_id]}")
+            # 8) Build & execute the UPDATE
+            cols = ", ".join(f"{col} = %s" for col in to_update)
+            sql  = f"UPDATE cronbid_campaigns SET {cols} WHERE campaign_id = %s"
+            params = list(to_update.values()) + [campaign_id]
 
             async with conn.cursor() as cur:
-                await cur.execute(query, list(values.values()) + [campaign_id])
+                await cur.execute(sql, params)
                 await insert_log_entry(
-                    conn=conn,
+                    conn,
                     action="update",
                     table_name="cronbid_campaigns",
                     record_id=campaign_id,
@@ -212,15 +215,15 @@ async def update_campaign(campaign_id: str, request: Request):
                 )
 
         return {
-            "success": True,
-            "message": "Campaign updated successfully",
+            "success":     True,
+            "message":     "Campaign updated successfully",
             "campaign_id": campaign_id
         }
 
-    except HTTPException as he:
-        print(f"[HTTP ERROR] {he.detail}")
-        raise he
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"[UNEXPECTED ERROR] {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Internal Server Error during campaign update")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal Server Error during campaign update: {e}"
+        )
