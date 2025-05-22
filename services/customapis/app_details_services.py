@@ -1,37 +1,55 @@
 # services/app_details_service.py
+
 import httpx
 from fastapi import HTTPException
 from google_play_scraper import app as gp_app
 from models.app_details_model import AppDetails
 
-async def fetch_app_details(package_id: str) -> AppDetails:
-    # Android (Play Store)
-    try:
-        gplay = gp_app(package_id, lang='en', country='us')
-    except Exception:
-        gplay = None  # fallback to iOS
 
-    # iOS (App Store)
-    itunes_data = []
+async def fetch_app_details(package_id: str) -> AppDetails:
+    gplay_data = None
+    ios_data = None
+
+    # Attempt to fetch from Google Play (Android)
+    try:
+        gplay_data = gp_app(package_id, lang='en', country='us')
+    except Exception:
+        pass  # Continue to fallback
+
+    # Attempt to fetch from Apple App Store (iOS)
     async with httpx.AsyncClient() as client:
         try:
-            itunes_resp = await client.get(
+            response = await client.get(
                 "https://itunes.apple.com/lookup",
                 params={"bundleId": package_id}
             )
-            itunes_data = itunes_resp.json().get("results", [])
+            results = response.json().get("results", [])
+            ios_data = results[0] if results else None
         except Exception:
-            itunes_data = []
+            pass  # Continue
 
-    # Choose source (Android preferred, fallback iOS)
-    source = gplay if gplay and gplay.get("title") else (itunes_data[0] if itunes_data else None)
-    if not source:
-        raise HTTPException(status_code=404, detail="App data unavailable")
+    # Determine which store provided valid data
+    if gplay_data and gplay_data.get("title"):
+        return AppDetails(
+            name=gplay_data.get("title"),
+            icon=gplay_data.get("icon"),
+            description=gplay_data.get("description"),
+            developer=gplay_data.get("developer"),
+            store_url=gplay_data.get("url"),
+            os="android",
+            device="mobile"  # Default assumption, can improve with more logic
+        )
 
-    return AppDetails(
-        name=source.get("title") or source.get("trackName"),
-        icon=source.get("icon") or source.get("artworkUrl100"),
-        description=source.get("description"),
-        developer=source.get("developer") or source.get("artistName"),
-        store_url=source.get("url") or source.get("trackViewUrl")
-    )
+    if ios_data and ios_data.get("trackName"):
+        return AppDetails(
+            name=ios_data.get("trackName"),
+            icon=ios_data.get("artworkUrl100"),
+            description=ios_data.get("description"),
+            developer=ios_data.get("artistName"),
+            store_url=ios_data.get("trackViewUrl"),
+            os="ios",
+            device="mobile"  # Default assumption, can improve with more logic
+        )
+
+    # If neither worked
+    raise HTTPException(status_code=404, detail="App data unavailable")

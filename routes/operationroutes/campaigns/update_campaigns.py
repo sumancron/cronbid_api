@@ -136,6 +136,12 @@ def process_targeting_data(targeting: dict) -> list:
 
     return processed
 
+def compare_json_fields(new_data, old_data, field_name):
+    """Compare JSON fields and return True if different"""
+    new_json = json.dumps(new_data, sort_keys=True) if new_data else '{}'
+    old_json = old_data if isinstance(old_data, str) else json.dumps(old_data, sort_keys=True)
+    return new_json != old_json
+
 @router.put("/update_campaign/{campaign_id}", dependencies=[Depends(verify_api_key)])
 async def update_campaign(campaign_id: str, request: Request):
     try:
@@ -144,9 +150,9 @@ async def update_campaign(campaign_id: str, request: Request):
         sanitize_input(data)
 
         # 2) Identify user & log
-        user_id   = data.get("user_id", "unknown")
+        user_id = data.get("user_id", "unknown")
         user_name = data.get("user_name", "Unknown User")
-        log_id    = generate_log_id()
+        log_id = generate_log_id()
 
         # 3) Connect & fetch existing
         pool = await Database.connect()
@@ -162,63 +168,88 @@ async def update_campaign(campaign_id: str, request: Request):
                 old_creatives
             )
 
-            # 5) Re‑process targeting
+            # 5) Process targeting data
             targeting_data = process_targeting_data(data.get("targeting", {}))
 
-            # 6) Build the full `source` JSON
-            source_json = json.dumps(data.get("source", {}))
-
-            # 7) Prepare all fields to update
-            to_update = {
-                "brand":           data["general"].get("brandId"),
-                "app_package_id":  data["appDetails"].get("packageId"),
-                "app_name":        data["appDetails"].get("appName"),
-                "preview_url":     data["appDetails"].get("previewUrl"),
-                "description":     data["appDetails"].get("description"),
-                "category":        data["campaignDetails"].get("category"),
-                "campaign_title":  data["campaignDetails"].get("campaignTitle"),
-                "kpis":            data["campaignDetails"].get("kpis"),
-                "mmp":             data["campaignDetails"].get("mmp"),
-                "click_url":       data["campaignDetails"].get("clickUrl"),
-                "impression_url":  data["campaignDetails"].get("impressionUrl"),
-                "deeplink":        data["campaignDetails"].get("deeplink"),
-                "creatives":       json.dumps(creatives.get("files", [])),
-                "events":          json.dumps(data["conversionFlow"].get("events", [])),
-                "payable":         int(bool(data["conversionFlow"].get("selectedPayable"))),
-                "event_amount":    data["conversionFlow"].get("amount", 0),
-                "campaign_budget": data["budget"].get("campaignBudget", 0),
-                "daily_budget":    data["budget"].get("dailyBudget", 0),
-                "monthly_budget":  data["budget"].get("monthlyBudget", 0),
-                "targeting":       json.dumps(targeting_data),
-                "source":          source_json,
-                "created_by":      user_id,
-                "updated_at":      datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                "log_id":          log_id
+            # 6) Prepare all potential fields to update
+            new_data = {
+                "brand": data.get("general", {}).get("brandId"),
+                "brand_name": data.get("general", {}).get("brandName"),
+                "app_details": data.get("appDetails", {}),
+                "campaign_details": data.get("campaignDetails", {}),
+                "creatives": creatives.get("files", []),
+                "conversion_flow": data.get("conversionFlow", {}),
+                "budget": data.get("budget", {}),
+                "targeting": targeting_data,
+                "source": data.get("source", {}),
+                "created_by": user_id,
+                "updated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                "log_id": log_id
             }
 
-            # 8) Build & execute the UPDATE
-            cols = ", ".join(f"{col} = %s" for col in to_update)
-            sql  = f"UPDATE cronbid_campaigns SET {cols} WHERE campaign_id = %s"
-            params = list(to_update.values()) + [campaign_id]
+            # 7) Compare with existing data and only keep changed fields
+            to_update = {}
+            
+            # Compare regular fields
+            if new_data["brand"] != existing.get("brand"):
+                to_update["brand"] = new_data["brand"]
+            if new_data["brand_name"] != existing.get("brand_name"):
+                to_update["brand_name"] = new_data["brand_name"]
+            if new_data["created_by"] != existing.get("created_by"):
+                to_update["created_by"] = new_data["created_by"]
+            
+            # Compare JSON fields
+            if compare_json_fields(new_data["app_details"], existing.get("app_details"), "app_details"):
+                to_update["app_details"] = json.dumps(new_data["app_details"])
+            if compare_json_fields(new_data["campaign_details"], existing.get("campaign_details"), "campaign_details"):
+                to_update["campaign_details"] = json.dumps(new_data["campaign_details"])
+            if compare_json_fields(new_data["creatives"], existing.get("creatives"), "creatives"):
+                to_update["creatives"] = json.dumps(new_data["creatives"])
+            if compare_json_fields(new_data["conversion_flow"], existing.get("conversion_flow"), "conversion_flow"):
+                to_update["conversion_flow"] = json.dumps(new_data["conversion_flow"])
+            if compare_json_fields(new_data["budget"], existing.get("budget"), "budget"):
+                to_update["budget"] = json.dumps(new_data["budget"])
+            if compare_json_fields(new_data["targeting"], existing.get("targeting"), "targeting"):
+                to_update["targeting"] = json.dumps(new_data["targeting"])
+            if compare_json_fields(new_data["source"], existing.get("source"), "source"):
+                to_update["source"] = json.dumps(new_data["source"])
+            
+            # Always update these fields
+            to_update["updated_at"] = new_data["updated_at"]
+            to_update["log_id"] = new_data["log_id"]
 
-            async with conn.cursor() as cur:
-                await cur.execute(sql, params)
-                await insert_log_entry(
-                    conn,
-                    action="update",
-                    table_name="cronbid_campaigns",
-                    record_id=campaign_id,
-                    user_id=user_id,
-                    username=user_name,
-                    action_description=f"Updated campaign {campaign_id}",
-                    log_id=log_id
-                )
+            # 8) Only proceed with update if something changed
+            if len(to_update) > 2:  # More than just updated_at and log_id
+                cols = ", ".join(f"{col} = %s" for col in to_update)
+                sql = f"UPDATE cronbid_campaigns SET {cols} WHERE campaign_id = %s"
+                params = list(to_update.values()) + [campaign_id]
 
-        return {
-            "success":     True,
-            "message":     "Campaign updated successfully",
-            "campaign_id": campaign_id
-        }
+                async with conn.cursor() as cur:
+                    await cur.execute(sql, params)
+                    await insert_log_entry(
+                        conn,
+                        action="update",
+                        table_name="cronbid_campaigns",
+                        record_id=campaign_id,
+                        user_id=user_id,
+                        username=user_name,
+                        action_description=f"Updated campaign {campaign_id}",
+                        log_id=log_id
+                    )
+
+                return {
+                    "success": True,
+                    "message": "Campaign updated successfully",
+                    "campaign_id": campaign_id,
+                    "changes_made": len(to_update) - 2  # exclude updated_at and log_id
+                }
+            else:
+                return {
+                    "success": True,
+                    "message": "No changes detected - campaign not updated",
+                    "campaign_id": campaign_id,
+                    "changes_made": 0
+                }
 
     except HTTPException:
         raise

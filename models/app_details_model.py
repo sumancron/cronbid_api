@@ -1,5 +1,6 @@
-# models/app_details_model.py
 from pydantic import BaseModel
+from typing import Literal
+
 
 class AppDetails(BaseModel):
     name: str
@@ -7,3 +8,5 @@ class AppDetails(BaseModel):
     description: str
     developer: str
     store_url: str
+    os: Literal["android", "ios"]
+    device: Literal["mobile", "tablet", "unknown"] = "mobile"

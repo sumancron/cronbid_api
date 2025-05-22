@@ -84,6 +84,47 @@ DROP COLUMN direct_apps,
 DROP COLUMN oems,
 ADD COLUMN source JSON DEFAULT NULL AFTER targeting;
 
+-- Add brand_name column separately (keeping brand as brandId)
+ALTER TABLE cronbid_campaigns
+ADD COLUMN brand_name VARCHAR(255) DEFAULT NULL AFTER brand;
+
+-- Convert appDetails section to a JSON column
+ALTER TABLE cronbid_campaigns
+DROP COLUMN app_package_id,
+DROP COLUMN app_name,
+DROP COLUMN preview_url,
+DROP COLUMN description,
+ADD COLUMN app_details JSON DEFAULT NULL;
+
+-- Convert budget section to a JSON column
+ALTER TABLE cronbid_campaigns
+DROP COLUMN campaign_budget,
+DROP COLUMN daily_budget,
+DROP COLUMN monthly_budget,
+ADD COLUMN budget JSON DEFAULT NULL;
+
+-- Convert campaignDetails section to a JSON column
+ALTER TABLE cronbid_campaigns
+DROP COLUMN category,
+DROP COLUMN campaign_title,
+DROP COLUMN kpis,
+DROP COLUMN mmp,
+DROP COLUMN click_url,
+DROP COLUMN impression_url,
+DROP COLUMN deeplink,
+ADD COLUMN campaign_details JSON DEFAULT NULL;
+
+-- Convert conversionFlow section to a JSON column
+ALTER TABLE cronbid_campaigns
+DROP COLUMN events,
+DROP COLUMN payable,
+DROP COLUMN event_amount,
+ADD COLUMN conversion_flow JSON DEFAULT NULL;
+
+-- Keep creatives as-is (as you requested)
+
+-- Source and targeting columns were already modified earlier:
+-- `targeting` and `source` are JSON columns already.
 
 -- Table: cronbid_brands
 

@@ -188,32 +188,25 @@ async def post_campaign(request: Request):
         # Process targeting data
         targeting_data = process_targeting_data(data.get("targeting", {}))
 
-        # Full source JSON as string
+        # Prepare JSON data for new columns
+        app_details = json.dumps(data.get("appDetails", {}))
+        budget = json.dumps(data.get("budget", {}))
+        campaign_details = json.dumps(data.get("campaignDetails", {}))
+        conversion_flow = json.dumps(data.get("conversionFlow", {}))
         source_json = json.dumps(data.get("source", {}))
+        targeting_json = json.dumps(targeting_data)
 
         # Prepare DB values
         values = (
             campaign_id,
-            data.get("general", {}).get("brandId"),
-            data.get("appDetails", {}).get("packageId"),
-            data.get("appDetails", {}).get("appName"),
-            data.get("appDetails", {}).get("previewUrl"),
-            data.get("appDetails", {}).get("description"),
-            data.get("campaignDetails", {}).get("category"),
-            data.get("campaignDetails", {}).get("campaignTitle"),
-            data.get("campaignDetails", {}).get("kpis"),
-            data.get("campaignDetails", {}).get("mmp"),
-            data.get("campaignDetails", {}).get("clickUrl"),
-            data.get("campaignDetails", {}).get("impressionUrl"),
-            data.get("campaignDetails", {}).get("deeplink"),
-            json.dumps(creatives.get("files", [])),
-            json.dumps(data.get("conversionFlow", {}).get("events", [])),
-            1 if data.get("conversionFlow", {}).get("selectedPayable") else 0,
-            data.get("conversionFlow", {}).get("amount", 0),
-            data.get("budget", {}).get("campaignBudget", 0),
-            data.get("budget", {}).get("dailyBudget", 0),
-            data.get("budget", {}).get("monthlyBudget", 0),
-            json.dumps(targeting_data),
+            data.get("general", {}).get("brandId"),  # brand (brandId)
+            data.get("general", {}).get("brandName"),  # brand_name
+            app_details,
+            campaign_details,
+            json.dumps(creatives.get("files", [])),  # creatives remains as-is
+            conversion_flow,
+            budget,
+            targeting_json,
             source_json,
             user_id,
             log_id
@@ -221,15 +214,10 @@ async def post_campaign(request: Request):
 
         query = """
         INSERT INTO cronbid_campaigns (
-            campaign_id, brand, app_package_id, app_name, preview_url, description,
-            category, campaign_title, kpis, mmp, click_url, impression_url, deeplink,
-            creatives, events, payable, event_amount,
-            campaign_budget, daily_budget, monthly_budget, targeting,
+            campaign_id, brand, brand_name, app_details, campaign_details,
+            creatives, conversion_flow, budget, targeting,
             source, created_by, log_id
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                  %s, %s, %s, %s,
-                  %s, %s, %s, %s,
-                  %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         pool = await Database.connect()
@@ -262,5 +250,3 @@ async def post_campaign(request: Request):
             status_code=500,
             detail=f"Campaign creation failed: {str(e)}"
         )
-        
-        
