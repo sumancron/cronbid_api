@@ -63,16 +63,51 @@ async def get_existing_campaign(campaign_id: str, conn):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Error fetching campaign")
 
+def delete_media_file(file_path: str, user_id: str, campaign_id: str):
+    """Delete a media file from the filesystem"""
+    try:
+        # Extract filename from file path
+        if file_path.startswith(f"/campaignsmedia/{user_id}/{campaign_id}/"):
+            filename = file_path.split("/")[-1]
+            full_path = os.path.join(UPLOADS_DIR, user_id, campaign_id, filename)
+            if os.path.exists(full_path):
+                os.remove(full_path)
+                print(f"[INFO] Deleted file: {full_path}")
+            else:
+                print(f"[WARNING] File not found for deletion: {full_path}")
+    except Exception as e:
+        print(f"[WARNING] Failed to delete file {file_path}: {str(e)}")
+
 async def save_media_files(creatives_data: dict, user_id: str, campaign_id: str, existing_files=None) -> dict:
-    if not creatives_data.get("files"):
-        return creatives_data
+    """Handle media files with support for additions and deletions"""
+    if not creatives_data or "files" not in creatives_data:
+        # If no creatives data provided, return existing files
+        return {"files": existing_files or []}
 
-    processed_files = existing_files or []
-    new_files = []
-
-    for file in creatives_data["files"]:
+    existing_files = existing_files or []
+    new_files_list = creatives_data["files"]
+    
+    # Track which existing files are still present
+    existing_file_paths = {file.get("filePath") for file in existing_files if file.get("filePath")}
+    new_file_paths = {file.get("filePath") for file in new_files_list if file.get("filePath") and not file.get("fileData", "").startswith("data:")}
+    
+    # Find files to delete (existing files not present in new list)
+    files_to_delete = existing_file_paths - new_file_paths
+    
+    # Delete removed files from filesystem
+    for file_path in files_to_delete:
+        delete_media_file(file_path, user_id, campaign_id)
+    
+    processed_files = []
+    
+    for file in new_files_list:
+        # If file has filePath and no new fileData, it's an existing file to keep
         if "filePath" in file and not file.get("fileData", "").startswith("data:"):
             processed_files.append(file)
+            continue
+
+        # Only process files with new base64 data
+        if not file.get("fileData", "").startswith("data:"):
             continue
 
         try:
@@ -102,45 +137,128 @@ async def save_media_files(creatives_data: dict, user_id: str, campaign_id: str,
                 "fileData": f"{user_id}/{campaign_id}/{filename}",
                 "filePath": f"/campaignsmedia/{user_id}/{campaign_id}/{filename}"
             }
-            new_files.append(processed_file)
+            processed_files.append(processed_file)
 
         except Exception as e:
             print(f"[ERROR] Media file save failed: {str(e)}")
             traceback.print_exc()
             raise HTTPException(status_code=400, detail=f"Media file save error: {str(e)}")
 
-    return {**creatives_data, "files": processed_files + new_files}
+    return {"files": processed_files}
 
-def process_targeting_data(targeting: dict) -> list:
-    processed = []
+def process_targeting_data(targeting: dict, existing_targeting=None) -> list:
+    """Process targeting data, preserving existing if new data is incomplete"""
+    if not targeting:
+        # If no targeting data provided, return existing targeting
+        return existing_targeting if existing_targeting else []
+    
+    # Handle case where targeting is already a list (direct targeting data)
     if isinstance(targeting, list):
         return targeting
 
-    if not targeting or not isinstance(targeting, dict):
+    # Handle nested countrySelections structure
+    country_selections = targeting.get("countrySelections")
+    if not country_selections:
+        return existing_targeting if existing_targeting else []
+
+    # Handle case where countrySelections is a list instead of dict
+    if isinstance(country_selections, list):
+        # If it's already in the final format, return it
+        return country_selections
+
+    # Handle case where countrySelections is a dict
+    if isinstance(country_selections, dict):
+        # Extract the actual targeting data
+        selected_countries = country_selections.get("selectedCountries", [])
+        included_states = country_selections.get("includedStates", [])
+        excluded_states = country_selections.get("excludedStates", [])
+
+        # If no countries selected, return existing
+        if not selected_countries:
+            return existing_targeting if existing_targeting else []
+
+        # Group states by country
+        country_states = {}
+        for country in selected_countries:
+            country_states[country] = {
+                "includedStates": [],
+                "excludedStates": []
+            }
+
+        # Add included states
+        for state_info in included_states:
+            if isinstance(state_info, dict) and "country" in state_info and "state" in state_info:
+                country = state_info["country"]
+                if country in country_states:
+                    country_states[country]["includedStates"].append(state_info["state"])
+
+        # Add excluded states
+        for state_info in excluded_states:
+            if isinstance(state_info, dict) and "country" in state_info and "state" in state_info:
+                country = state_info["country"]
+                if country in country_states:
+                    country_states[country]["excludedStates"].append(state_info["state"])
+
+        # Create final processed list
+        processed = []
+        for country in selected_countries:
+            processed.append({
+                "country": country,
+                "includedStates": country_states[country]["includedStates"],
+                "excludedStates": country_states[country]["excludedStates"]
+            })
+
         return processed
+    
+    # If we can't handle the format, return existing
+    return existing_targeting if existing_targeting else []
 
-    country_selections = targeting
-    if not isinstance(country_selections, list):
-        return processed
-
-    for entry in country_selections:
-        if not isinstance(entry, dict):
-            continue
-        country_data = {
-            "country": entry.get("selectedCountry", {}).get("country", ""),
-            "includedStates": [s for s in entry.get("includedStates", []) if isinstance(s, str)],
-            "excludedStates": [s for s in entry.get("excludedStates", []) if isinstance(s, str)]
-        }
-        if country_data["country"]:
-            processed.append(country_data)
-
-    return processed
-
-def compare_json_fields(new_data, old_data, field_name):
+def compare_json_fields(new_data, old_data):
     """Compare JSON fields and return True if different"""
-    new_json = json.dumps(new_data, sort_keys=True) if new_data else '{}'
-    old_json = old_data if isinstance(old_data, str) else json.dumps(old_data, sort_keys=True)
-    return new_json != old_json
+    if new_data is None and old_data is None:
+        return False
+    if new_data is None or old_data is None:
+        return True
+        
+    try:
+        new_json = json.dumps(new_data, sort_keys=True) if new_data else '{}'
+        old_json = old_data if isinstance(old_data, str) else json.dumps(old_data, sort_keys=True)
+        return new_json != old_json
+    except Exception as e:
+        print(f"[WARNING] JSON comparison failed: {e}")
+        return True  # Assume different if comparison fails
+
+def safe_get_nested_value(data: dict, key: str, default=None):
+    """Safely get nested dictionary values"""
+    try:
+        return data.get(key, default) if data else default
+    except (AttributeError, TypeError):
+        return default
+
+def has_meaningful_targeting_changes(targeting_data):
+    """Check if targeting data contains meaningful changes (not just structural/validation flags)"""
+    if not targeting_data or not isinstance(targeting_data, dict):
+        return False
+    
+    # Check if it has actual targeting content beyond just validation flags
+    country_selections = targeting_data.get("countrySelections")
+    if not country_selections:
+        return False
+    
+    # If it's a dict with actual selection data
+    if isinstance(country_selections, dict):
+        selected_countries = country_selections.get("selectedCountries", [])
+        included_states = country_selections.get("includedStates", [])
+        excluded_states = country_selections.get("excludedStates", [])
+        
+        # Has meaningful data if there are countries, states, or exclusions
+        return bool(selected_countries or included_states or excluded_states)
+    
+    # If it's a list, check if it has content
+    if isinstance(country_selections, list):
+        return len(country_selections) > 0
+    
+    return False
 
 @router.put("/update_campaign/{campaign_id}", dependencies=[Depends(verify_api_key)])
 async def update_campaign(campaign_id: str, request: Request):
@@ -158,71 +276,99 @@ async def update_campaign(campaign_id: str, request: Request):
         pool = await Database.connect()
         async with pool.acquire() as conn:
             existing = await get_existing_campaign(campaign_id, conn)
-            old_creatives = json.loads(existing.get("creatives", "[]"))
-
-            # 4) Save any new media
-            creatives = await save_media_files(
-                data.get("creatives", {}),
-                user_id,
-                campaign_id,
-                old_creatives
-            )
-
-            # 5) Process targeting data
-            targeting_data = process_targeting_data(data.get("targeting", {}))
-
-            # 6) Prepare all potential fields to update
-            new_data = {
-                "brand": data.get("general", {}).get("brandId"),
-                "brand_name": data.get("general", {}).get("brandName"),
-                "app_details": data.get("appDetails", {}),
-                "campaign_details": data.get("campaignDetails", {}),
-                "creatives": creatives.get("files", []),
-                "conversion_flow": data.get("conversionFlow", {}),
-                "budget": data.get("budget", {}),
-                "targeting": targeting_data,
-                "source": data.get("source", {}),
-                "created_by": user_id,
-                "updated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                "log_id": log_id
-            }
-
-            # 7) Compare with existing data and only keep changed fields
-            to_update = {}
             
-            # Compare regular fields
-            if new_data["brand"] != existing.get("brand"):
-                to_update["brand"] = new_data["brand"]
-            if new_data["brand_name"] != existing.get("brand_name"):
-                to_update["brand_name"] = new_data["brand_name"]
-            if new_data["created_by"] != existing.get("created_by"):
-                to_update["created_by"] = new_data["created_by"]
-            
-            # Compare JSON fields
-            if compare_json_fields(new_data["app_details"], existing.get("app_details"), "app_details"):
-                to_update["app_details"] = json.dumps(new_data["app_details"])
-            if compare_json_fields(new_data["campaign_details"], existing.get("campaign_details"), "campaign_details"):
-                to_update["campaign_details"] = json.dumps(new_data["campaign_details"])
-            if compare_json_fields(new_data["creatives"], existing.get("creatives"), "creatives"):
-                to_update["creatives"] = json.dumps(new_data["creatives"])
-            if compare_json_fields(new_data["conversion_flow"], existing.get("conversion_flow"), "conversion_flow"):
-                to_update["conversion_flow"] = json.dumps(new_data["conversion_flow"])
-            if compare_json_fields(new_data["budget"], existing.get("budget"), "budget"):
-                to_update["budget"] = json.dumps(new_data["budget"])
-            if compare_json_fields(new_data["targeting"], existing.get("targeting"), "targeting"):
-                to_update["targeting"] = json.dumps(new_data["targeting"])
-            if compare_json_fields(new_data["source"], existing.get("source"), "source"):
-                to_update["source"] = json.dumps(new_data["source"])
-            
-            # Always update these fields
-            to_update["updated_at"] = new_data["updated_at"]
-            to_update["log_id"] = new_data["log_id"]
+            # Parse existing JSON fields safely
+            existing_app_details = json.loads(existing.get("app_details", "{}"))
+            existing_campaign_details = json.loads(existing.get("campaign_details", "{}"))
+            existing_creatives = json.loads(existing.get("creatives", "[]"))
+            existing_conversion_flow = json.loads(existing.get("conversion_flow", "{}"))
+            existing_budget = json.loads(existing.get("budget", "{}"))
+            existing_targeting = json.loads(existing.get("targeting", "[]"))
+            existing_source = json.loads(existing.get("source", "{}"))
 
-            # 8) Only proceed with update if something changed
-            if len(to_update) > 2:  # More than just updated_at and log_id
-                cols = ", ".join(f"{col} = %s" for col in to_update)
+            # 4) Process only provided sections with meaningful changes
+            updates_to_apply = {}
+            
+            # Only update fields that are provided in the request
+            if "general" in data and data["general"]:
+                general_data = data.get("general", {})
+                if safe_get_nested_value(general_data, "brandId") != existing.get("brand"):
+                    updates_to_apply["brand"] = safe_get_nested_value(general_data, "brandId")
+                if safe_get_nested_value(general_data, "brandName") != existing.get("brand_name"):
+                    updates_to_apply["brand_name"] = safe_get_nested_value(general_data, "brandName")
+
+            # App Details - only update if provided and different
+            if "appDetails" in data and data["appDetails"]:
+                app_details_data = data["appDetails"]
+                if compare_json_fields(app_details_data, existing_app_details):
+                    # Merge with existing data to preserve fields not provided
+                    merged_app_details = {**existing_app_details, **app_details_data}
+                    updates_to_apply["app_details"] = json.dumps(merged_app_details)
+
+            # Campaign Details - only update if provided and different
+            if "campaignDetails" in data and data["campaignDetails"]:
+                campaign_details_data = data["campaignDetails"]
+                if compare_json_fields(campaign_details_data, existing_campaign_details):
+                    # Merge with existing data
+                    merged_campaign_details = {**existing_campaign_details, **campaign_details_data}
+                    updates_to_apply["campaign_details"] = json.dumps(merged_campaign_details)
+
+            # Creatives - handle file uploads and deletions
+            if "creatives" in data:
+                creatives_data = data["creatives"]
+                processed_creatives = await save_media_files(
+                    creatives_data,
+                    user_id,
+                    campaign_id,
+                    existing_creatives
+                )
+                
+                # Always update creatives if the section is provided (to handle deletions)
+                updates_to_apply["creatives"] = json.dumps(processed_creatives.get("files", []))
+
+            # Conversion Flow - only update if provided and different
+            if "conversionFlow" in data and data["conversionFlow"]:
+                conversion_flow_data = data["conversionFlow"]
+                if compare_json_fields(conversion_flow_data, existing_conversion_flow):
+                    # Merge with existing data
+                    merged_conversion_flow = {**existing_conversion_flow, **conversion_flow_data}
+                    updates_to_apply["conversion_flow"] = json.dumps(merged_conversion_flow)
+
+            # Budget - only update if provided and different
+            if "budget" in data and data["budget"]:
+                budget_data = data["budget"]
+                if compare_json_fields(budget_data, existing_budget):
+                    # Merge with existing data
+                    merged_budget = {**existing_budget, **budget_data}
+                    updates_to_apply["budget"] = json.dumps(merged_budget)
+
+            # Targeting - ONLY update if meaningful targeting changes are provided
+            if "targeting" in data and data["targeting"] and has_meaningful_targeting_changes(data["targeting"]):
+                targeting_data = data["targeting"]
+                processed_targeting = process_targeting_data(targeting_data, existing_targeting)
+                
+                # Only update if targeting has actually changed and is valid
+                if processed_targeting and compare_json_fields(processed_targeting, existing_targeting):
+                    updates_to_apply["targeting"] = json.dumps(processed_targeting)
+
+            # Source - only update if provided and different
+            if "source" in data and data["source"]:
+                source_data = data["source"]
+                if compare_json_fields(source_data, existing_source):
+                    # Merge with existing data
+                    merged_source = {**existing_source, **source_data}
+                    updates_to_apply["source"] = json.dumps(merged_source)
+
+            # Always update metadata
+            updates_to_apply["created_by"] = user_id
+            updates_to_apply["updated_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            updates_to_apply["log_id"] = log_id
+
+            # 5) Only proceed with update if there are actual changes
+            if len(updates_to_apply) > 3:  # More than just created_by, updated_at, and log_id
+                cols = ", ".join(f"{col} = %s" for col in updates_to_apply)
                 sql = f"UPDATE cronbid_campaigns SET {cols} WHERE campaign_id = %s"
-                params = list(to_update.values()) + [campaign_id]
+                params = list(updates_to_apply.values()) + [campaign_id]
 
                 async with conn.cursor() as cur:
                     await cur.execute(sql, params)
@@ -241,7 +387,8 @@ async def update_campaign(campaign_id: str, request: Request):
                     "success": True,
                     "message": "Campaign updated successfully",
                     "campaign_id": campaign_id,
-                    "changes_made": len(to_update) - 2  # exclude updated_at and log_id
+                    "changes_made": len(updates_to_apply) - 3,  # exclude metadata fields
+                    "updated_fields": [field for field in updates_to_apply.keys() if field not in ["created_by", "updated_at", "log_id"]]
                 }
             else:
                 return {
@@ -254,6 +401,8 @@ async def update_campaign(campaign_id: str, request: Request):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[ERROR] Campaign update failed: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Internal Server Error during campaign update: {e}"
