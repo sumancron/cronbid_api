@@ -3,6 +3,7 @@ from database import Database
 from auth import verify_api_key
 import aiomysql
 from typing import Optional
+import json
 
 router = APIRouter()
 
@@ -47,6 +48,17 @@ async def get_campaigns(
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute(query, values)
                 rows = await cur.fetchall()
+
+        # Modify conversion_flow by adding 'payout' = 'amount'
+        for row in rows:
+            if "conversion_flow" in row and row["conversion_flow"]:
+                try:
+                    cf = json.loads(row["conversion_flow"])
+                    if isinstance(cf, dict) and "amount" in cf:
+                        cf["payout"] = cf["amount"]
+                        row["conversion_flow"] = json.dumps(cf)
+                except json.JSONDecodeError:
+                    pass  # Skip if conversion_flow is not valid JSON
 
         return {"campaigns": rows}
 
