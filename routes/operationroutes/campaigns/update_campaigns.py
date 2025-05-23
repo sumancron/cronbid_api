@@ -147,24 +147,34 @@ async def save_media_files(creatives_data: dict, user_id: str, campaign_id: str,
     return {"files": processed_files}
 
 def process_targeting_data(targeting: dict, existing_targeting=None) -> list:
-    """Process targeting data, preserving existing if new data is incomplete"""
+    """Process targeting data, preserving existing if new data is incomplete or invalid"""
     if not targeting:
-        # If no targeting data provided, return existing targeting
+        # If no targeting data provided, return existing targeting unchanged
         return existing_targeting if existing_targeting else []
     
     # Handle case where targeting is already a list (direct targeting data)
     if isinstance(targeting, list):
-        return targeting
+        # Validate the list has proper structure
+        if targeting and all(isinstance(item, dict) and "country" in item for item in targeting):
+            return targeting
+        else:
+            # Invalid list structure, keep existing
+            return existing_targeting if existing_targeting else []
 
     # Handle nested countrySelections structure
     country_selections = targeting.get("countrySelections")
     if not country_selections:
+        # No country selections provided, keep existing
         return existing_targeting if existing_targeting else []
 
     # Handle case where countrySelections is a list instead of dict
     if isinstance(country_selections, list):
-        # If it's already in the final format, return it
-        return country_selections
+        # Validate the list structure
+        if country_selections and all(isinstance(item, dict) and "country" in item for item in country_selections):
+            return country_selections
+        else:
+            # Invalid structure, keep existing
+            return existing_targeting if existing_targeting else []
 
     # Handle case where countrySelections is a dict
     if isinstance(country_selections, dict):
@@ -173,8 +183,8 @@ def process_targeting_data(targeting: dict, existing_targeting=None) -> list:
         included_states = country_selections.get("includedStates", [])
         excluded_states = country_selections.get("excludedStates", [])
 
-        # If no countries selected, return existing
-        if not selected_countries:
+        # If no countries selected and no states specified, keep existing
+        if not selected_countries and not included_states and not excluded_states:
             return existing_targeting if existing_targeting else []
 
         # Group states by country
@@ -208,9 +218,9 @@ def process_targeting_data(targeting: dict, existing_targeting=None) -> list:
                 "excludedStates": country_states[country]["excludedStates"]
             })
 
-        return processed
+        return processed if processed else (existing_targeting if existing_targeting else [])
     
-    # If we can't handle the format, return existing
+    # If we can't handle the format, keep existing
     return existing_targeting if existing_targeting else []
 
 def compare_json_fields(new_data, old_data):
@@ -221,8 +231,17 @@ def compare_json_fields(new_data, old_data):
         return True
         
     try:
-        new_json = json.dumps(new_data, sort_keys=True) if new_data else '{}'
-        old_json = old_data if isinstance(old_data, str) else json.dumps(old_data, sort_keys=True)
+        # Normalize both to JSON strings for comparison
+        if isinstance(old_data, str):
+            old_json = old_data
+        else:
+            old_json = json.dumps(old_data, sort_keys=True)
+        
+        if isinstance(new_data, str):
+            new_json = new_data
+        else:
+            new_json = json.dumps(new_data, sort_keys=True)
+        
         return new_json != old_json
     except Exception as e:
         print(f"[WARNING] JSON comparison failed: {e}")
@@ -235,12 +254,16 @@ def safe_get_nested_value(data: dict, key: str, default=None):
     except (AttributeError, TypeError):
         return default
 
-def has_meaningful_targeting_changes(targeting_data):
-    """Check if targeting data contains meaningful changes (not just structural/validation flags)"""
+def has_valid_targeting_data(targeting_data):
+    """Check if targeting data is valid and should be processed"""
     if not targeting_data or not isinstance(targeting_data, dict):
         return False
     
-    # Check if it has actual targeting content beyond just validation flags
+    # Check if it has the isValid flag set to True (from frontend validation)
+    if targeting_data.get("isValid") is not True:
+        return False
+    
+    # Check if it has actual targeting content
     country_selections = targeting_data.get("countrySelections")
     if not country_selections:
         return False
@@ -251,12 +274,15 @@ def has_meaningful_targeting_changes(targeting_data):
         included_states = country_selections.get("includedStates", [])
         excluded_states = country_selections.get("excludedStates", [])
         
-        # Has meaningful data if there are countries, states, or exclusions
-        return bool(selected_countries or included_states or excluded_states)
+        # Has valid data if there are countries selected
+        return bool(selected_countries)
     
-    # If it's a list, check if it has content
+    # If it's a list, check if it has valid content
     if isinstance(country_selections, list):
-        return len(country_selections) > 0
+        return len(country_selections) > 0 and all(
+            isinstance(item, dict) and "country" in item 
+            for item in country_selections
+        )
     
     return False
 
@@ -271,6 +297,8 @@ async def update_campaign(campaign_id: str, request: Request):
         user_id = data.get("user_id", "unknown")
         user_name = data.get("user_name", "Unknown User")
         log_id = generate_log_id()
+
+        print(f"[INFO] Updating campaign {campaign_id} with data: {list(data.keys())}")
 
         # 3) Connect & fetch existing
         pool = await Database.connect()
@@ -292,10 +320,13 @@ async def update_campaign(campaign_id: str, request: Request):
             # Only update fields that are provided in the request
             if "general" in data and data["general"]:
                 general_data = data.get("general", {})
-                if safe_get_nested_value(general_data, "brandId") != existing.get("brand"):
-                    updates_to_apply["brand"] = safe_get_nested_value(general_data, "brandId")
-                if safe_get_nested_value(general_data, "brandName") != existing.get("brand_name"):
-                    updates_to_apply["brand_name"] = safe_get_nested_value(general_data, "brandName")
+                brand_id = safe_get_nested_value(general_data, "brandId")
+                brand_name = safe_get_nested_value(general_data, "brandName")
+                
+                if brand_id and str(brand_id) != str(existing.get("brand", "")):
+                    updates_to_apply["brand"] = brand_id
+                if brand_name and str(brand_name) != str(existing.get("brand_name", "")):
+                    updates_to_apply["brand_name"] = brand_name
 
             # App Details - only update if provided and different
             if "appDetails" in data and data["appDetails"]:
@@ -342,14 +373,25 @@ async def update_campaign(campaign_id: str, request: Request):
                     merged_budget = {**existing_budget, **budget_data}
                     updates_to_apply["budget"] = json.dumps(merged_budget)
 
-            # Targeting - ONLY update if meaningful targeting changes are provided
-            if "targeting" in data and data["targeting"] and has_meaningful_targeting_changes(data["targeting"]):
+            # Targeting - ONLY update if valid targeting data is provided
+            if "targeting" in data:
                 targeting_data = data["targeting"]
-                processed_targeting = process_targeting_data(targeting_data, existing_targeting)
+                print(f"[DEBUG] Targeting data received: {targeting_data}")
                 
-                # Only update if targeting has actually changed and is valid
-                if processed_targeting and compare_json_fields(processed_targeting, existing_targeting):
-                    updates_to_apply["targeting"] = json.dumps(processed_targeting)
+                # Only process if we have valid targeting data
+                if has_valid_targeting_data(targeting_data):
+                    processed_targeting = process_targeting_data(targeting_data, existing_targeting)
+                    print(f"[DEBUG] Processed targeting: {processed_targeting}")
+                    
+                    # Only update if targeting has actually changed
+                    if compare_json_fields(processed_targeting, existing_targeting):
+                        updates_to_apply["targeting"] = json.dumps(processed_targeting)
+                        print(f"[INFO] Targeting will be updated")
+                    else:
+                        print(f"[INFO] Targeting unchanged, skipping update")
+                else:
+                    print(f"[INFO] Invalid or incomplete targeting data, preserving existing")
+                    # Don't update targeting if data is invalid - preserve existing
 
             # Source - only update if provided and different
             if "source" in data and data["source"]:
@@ -363,6 +405,8 @@ async def update_campaign(campaign_id: str, request: Request):
             updates_to_apply["created_by"] = user_id
             updates_to_apply["updated_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             updates_to_apply["log_id"] = log_id
+
+            print(f"[INFO] Fields to update: {list(updates_to_apply.keys())}")
 
             # 5) Only proceed with update if there are actual changes
             if len(updates_to_apply) > 3:  # More than just created_by, updated_at, and log_id
@@ -383,14 +427,18 @@ async def update_campaign(campaign_id: str, request: Request):
                         log_id=log_id
                     )
 
+                updated_fields = [field for field in updates_to_apply.keys() if field not in ["created_by", "updated_at", "log_id"]]
+                print(f"[SUCCESS] Campaign {campaign_id} updated. Fields: {updated_fields}")
+
                 return {
                     "success": True,
                     "message": "Campaign updated successfully",
                     "campaign_id": campaign_id,
-                    "changes_made": len(updates_to_apply) - 3,  # exclude metadata fields
-                    "updated_fields": [field for field in updates_to_apply.keys() if field not in ["created_by", "updated_at", "log_id"]]
+                    "changes_made": len(updated_fields),
+                    "updated_fields": updated_fields
                 }
             else:
+                print(f"[INFO] No changes detected for campaign {campaign_id}")
                 return {
                     "success": True,
                     "message": "No changes detected - campaign not updated",
