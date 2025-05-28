@@ -69,13 +69,13 @@ async def update_brand(brand_data: UpdateBrandModel, request: Request):
             # Add system-generated metadata fields
             fields_to_update.extend([
                 "updated_at = %s",
-                "log_id = %s",
-                "created_by = %s"
+                "log_id = %s"
+                # Removed created_by update as requested
             ])
             values.extend([
                 datetime.utcnow(),
-                log_id,
-                brand_data.updated_by or "system"
+                log_id
+                # Removed created_by value as requested
             ])
 
             # Add brand_id at the end for WHERE clause

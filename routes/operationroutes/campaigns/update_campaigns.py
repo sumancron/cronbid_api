@@ -402,14 +402,15 @@ async def update_campaign(campaign_id: str, request: Request):
                     updates_to_apply["source"] = json.dumps(merged_source)
 
             # Always update metadata
-            updates_to_apply["created_by"] = user_id
+            # Commented out created_by update as requested
+            # updates_to_apply["created_by"] = user_id
             updates_to_apply["updated_at"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
             updates_to_apply["log_id"] = log_id
 
             print(f"[INFO] Fields to update: {list(updates_to_apply.keys())}")
 
             # 5) Only proceed with update if there are actual changes
-            if len(updates_to_apply) > 3:  # More than just created_by, updated_at, and log_id
+            if len(updates_to_apply) > 2:  # More than just updated_at and log_id (removed created_by from count)
                 cols = ", ".join(f"{col} = %s" for col in updates_to_apply)
                 sql = f"UPDATE cronbid_campaigns SET {cols} WHERE campaign_id = %s"
                 params = list(updates_to_apply.values()) + [campaign_id]
@@ -427,7 +428,7 @@ async def update_campaign(campaign_id: str, request: Request):
                         log_id=log_id
                     )
 
-                updated_fields = [field for field in updates_to_apply.keys() if field not in ["created_by", "updated_at", "log_id"]]
+                updated_fields = [field for field in updates_to_apply.keys() if field not in ["updated_at", "log_id"]]  # Removed created_by from this list
                 print(f"[SUCCESS] Campaign {campaign_id} updated. Fields: {updated_fields}")
 
                 return {
