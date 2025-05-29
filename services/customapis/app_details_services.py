@@ -1,6 +1,5 @@
 # services/app_details_service.py
 
-import re
 import httpx
 from fastapi import HTTPException
 from google_play_scraper import app as gp_app
@@ -10,37 +9,33 @@ from models.app_details_model import AppDetails
 async def fetch_app_details(package_id: str) -> AppDetails:
     gplay_data = None
     ios_data = None
-
     app_store_id = None
 
-    # Case 1: Input is in the form 'id123456789'
+    # Check if it's an App Store ID like 'id123456789'
     if package_id.startswith("id") and package_id[2:].isdigit():
         app_store_id = package_id[2:]
 
-    # Attempt to fetch from Google Play (Android) if it's not an App Store ID
+    # Try fetching from Google Play Store (Android)
     if not app_store_id:
         try:
             gplay_data = gp_app(package_id, lang='en', country='us')
-        except Exception:
-            pass  # Continue to fallback
+        except Exception as e:
+            print(f"[Google Play] Error fetching data for {package_id}: {e}")
 
-    # Attempt to fetch from Apple App Store (iOS)
+    # Try fetching from Apple App Store (iOS)
     async with httpx.AsyncClient() as client:
         try:
-            if app_store_id:
-                response = await client.get(
-                    "https://itunes.apple.com/lookup",
-                    params={"id": app_store_id}
-                )
-            else:
-                response = await client.get(
-                    "https://itunes.apple.com/lookup",
-                    params={"bundleId": package_id}
-                )
-            results = response.json().get("results", [])
+            params = {"id": app_store_id} if app_store_id else {"bundleId": package_id}
+            response = await client.get("https://itunes.apple.com/lookup", params=params)
+            response.raise_for_status()
+            json_data = response.json()
+            results = json_data.get("results", [])
+            if not results:
+                print(f"[App Store] Empty results for package_id: {package_id}")
+                print(f"[App Store] Full response: {json_data}")
             ios_data = results[0] if results else None
-        except Exception:
-            pass  # Continue
+        except Exception as e:
+            print(f"[App Store] Error fetching data for {package_id}: {e}")
 
     # Return Android app if found
     if gplay_data and gplay_data.get("title"):
@@ -66,5 +61,5 @@ async def fetch_app_details(package_id: str) -> AppDetails:
             device="mobile"
         )
 
-    # If neither worked
-    raise HTTPException(status_code=404, detail="App data unavailable")
+    # Neither store returned data
+    raise HTTPException(status_code=404, detail="App data unavailable. It may not exist or is restricted for your IP.")
