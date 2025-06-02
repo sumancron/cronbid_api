@@ -6,7 +6,7 @@ from routes import include_all_routes
 from database import Database
 
 origins = [
-      "*",
+      "https://ads.cronbid.com",
 ]
 
 @asynccontextmanager
