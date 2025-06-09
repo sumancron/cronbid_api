@@ -5,6 +5,7 @@ from .operationroutes.brands import brands, add_brands, update_brands
 from .operationroutes.campaigns import add_campaigns, campaigns, campaign_status, update_campaigns
 from .operationroutes.funds import funds,add_funds
 from .operationroutes.sources import sources
+from .userroutes import user_details
 
 # campaigns, funds, reports, settings, dashboard, auth, external_apis
 
@@ -30,6 +31,9 @@ def include_all_routes(app: FastAPI):
     
     #SOURCES RELATED ROUTES
     app.include_router(sources.router, prefix="/sources",tags=["sources"])
+
+    # USER Routes
+    app.include_router(user_details.router,prefix="/user",tags=["user"])
     
     # app.include_router(reports.router, prefix="/reports", tags=["Reports"])
     # app.include_router(settings.router, prefix="/settings", tags=["Settings"])

@@ -4,6 +4,7 @@ from database import Database
 from typing import Dict, List
 import os
 from dotenv import load_dotenv
+import aiomysql
 
 load_dotenv()
 
@@ -81,27 +82,26 @@ def sanitize_input(data: dict):
     
     return data
 
-@router.get("/user", response_model=List[Dict])
+@router.get("/get_user")
 async def get_users(skip: int = 0, limit: int = 10, x_api_key: str = Header(None)):
-    pool = await Database.connect()
-    if pool is None:
-        raise HTTPException(status_code=500, detail="Database connection failed")
-    
     if x_api_key != "jdfjdhfjdhbfjdhfjhdjjhbdj":
         raise HTTPException(status_code=403, detail="Invalid or missing API key")
         
+    pool = await Database.connect()
+    if pool is None:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+        
     conn = await pool.acquire()
     try:
-        async with conn.cursor() as cursor:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
             await cursor.execute("SELECT * FROM cronbid_users LIMIT %s OFFSET %s", (limit, skip))
             users = await cursor.fetchall()
             return users
     finally:
         pool.release(conn)
 
-@router.get("/user/{user_id}")
+@router.get("/get_user/{user_id}")
 async def get_user(user_id: int, x_api_key: str = Header(None)):
-        
     if x_api_key != "jdfjdhfjdhbfjdhfjhdjjhbdj":
         raise HTTPException(status_code=403, detail="Invalid or missing API key")
         
@@ -111,21 +111,21 @@ async def get_user(user_id: int, x_api_key: str = Header(None)):
         
     conn = await pool.acquire()
     try:
-        async with conn.cursor() as cursor:
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
             await cursor.execute("SELECT * FROM cronbid_users WHERE id = %s", (user_id,))
-            user = await cursor.fetchone()
+            user_data = await cursor.fetchone()
             
-            if not user:
+            if not user_data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="User not found"
                 )
             
-            return user
+            return user_data
     finally:
         pool.release(conn)
 
-@router.put("/user/{user_id}")
+@router.put("/put_user/{user_id}")
 async def update_user(user_id: int, user: Dict, x_api_key: str = Header(None)):
     # Sanitize and validate input
     user = sanitize_input(user)
@@ -178,16 +178,16 @@ async def update_user(user_id: int, user: Dict, x_api_key: str = Header(None)):
                 user.get("phone"),
                 user.get("skype"),
                 user.get("referrer_email"),
-                user.get("is_company", False),
+                user.get("is_company"),
                 user_id
             ))
             
-            # Get updated user
-            await cursor.execute("SELECT * FROM cronbid_users WHERE id = %s", (user_id,))
-            updated_user = await cursor.fetchone()
+            # # Get updated user
+            # await cursor.execute("SELECT * FROM cronbid_users WHERE id = %s", (user_id,))
+            # updated_user = await cursor.fetchone()
             
             await conn.commit()
-            return updated_user
+            return {"res":"User Updated ✅"}
             
     except Exception as e:
         await conn.rollback()
@@ -195,7 +195,7 @@ async def update_user(user_id: int, user: Dict, x_api_key: str = Header(None)):
     finally:
         pool.release(conn)
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/del_user/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(user_id: int, x_api_key: str = Header(None)):
         
     if x_api_key != "jdfjdhfjdhbfjdhfjhdjjhbdj":
@@ -217,7 +217,7 @@ async def delete_user(user_id: int, x_api_key: str = Header(None)):
                 )
             
             # Delete user
-            await cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+            await cursor.execute("DELETE FROM cronbid_users WHERE id = %s", (user_id,))
             await conn.commit()
             
             return None
