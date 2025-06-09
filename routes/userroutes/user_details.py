@@ -101,7 +101,7 @@ async def get_users(skip: int = 0, limit: int = 10, x_api_key: str = Header(None
         pool.release(conn)
 
 @router.get("/get_user/{user_id}")
-async def get_user(user_id: int, x_api_key: str = Header(None)):
+async def get_user(user_id: str, x_api_key: str = Header(None)):
     if x_api_key != "jdfjdhfjdhbfjdhfjhdjjhbdj":
         raise HTTPException(status_code=403, detail="Invalid or missing API key")
         
@@ -112,7 +112,7 @@ async def get_user(user_id: int, x_api_key: str = Header(None)):
     conn = await pool.acquire()
     try:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            await cursor.execute("SELECT * FROM cronbid_users WHERE id = %s", (user_id,))
+            await cursor.execute("SELECT * FROM cronbid_users WHERE user_id = %s", (user_id,))
             user_data = await cursor.fetchone()
             
             if not user_data:
@@ -126,7 +126,7 @@ async def get_user(user_id: int, x_api_key: str = Header(None)):
         pool.release(conn)
 
 @router.put("/put_user/{user_id}")
-async def update_user(user_id: int, user: Dict, x_api_key: str = Header(None)):
+async def update_user(user_id: str, user: Dict, x_api_key: str = Header(None)):
     # Sanitize and validate input
     user = sanitize_input(user)
    
@@ -141,7 +141,7 @@ async def update_user(user_id: int, user: Dict, x_api_key: str = Header(None)):
     try:
         async with conn.cursor() as cursor:
             # Check if user exists
-            await cursor.execute("SELECT * FROM cronbid_users WHERE id = %s", (user_id,))
+            await cursor.execute("SELECT * FROM cronbid_users WHERE user_id = %s", (user_id,))
             if not await cursor.fetchone():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -164,7 +164,7 @@ async def update_user(user_id: int, user: Dict, x_api_key: str = Header(None)):
                 referrer_email = %s,
                 is_company = %s,
                 updated_at = NOW()
-            WHERE id = %s
+            WHERE user_id = %s
             """
             await cursor.execute(query, (
                 user.get("first_name"),
@@ -196,7 +196,7 @@ async def update_user(user_id: int, user: Dict, x_api_key: str = Header(None)):
         pool.release(conn)
 
 @router.delete("/del_user/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(user_id: int, x_api_key: str = Header(None)):
+async def delete_user(user_id: str, x_api_key: str = Header(None)):
         
     if x_api_key != "jdfjdhfjdhbfjdhfjhdjjhbdj":
         raise HTTPException(status_code=403, detail="Invalid or missing API key")
@@ -209,7 +209,7 @@ async def delete_user(user_id: int, x_api_key: str = Header(None)):
     try:
         async with conn.cursor() as cursor:
             # Check if user exists
-            await cursor.execute("SELECT * FROM cronbid_users WHERE id = %s", (user_id,))
+            await cursor.execute("SELECT * FROM cronbid_users WHERE user_id = %s", (user_id,))
             if not await cursor.fetchone():
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -217,7 +217,7 @@ async def delete_user(user_id: int, x_api_key: str = Header(None)):
                 )
             
             # Delete user
-            await cursor.execute("DELETE FROM cronbid_users WHERE id = %s", (user_id,))
+            await cursor.execute("DELETE FROM cronbid_users WHERE user_id = %s", (user_id,))
             await conn.commit()
             
             return None
