@@ -18,8 +18,6 @@ def include_all_routes(app: FastAPI):
     app.include_router(add_brands.router, prefix="/add_brands", tags=["add_brands"])
     app.include_router(update_brands.router, prefix="/update_brands", tags=["update_brands"])
     
-
-
     #CAMPAIGNS RELATED ROUTES
     app.include_router(campaigns.router, prefix="/campaigns", tags=["Campaigns"])
     app.include_router(add_campaigns.router, prefix="/add_campaigns", tags=["add_campaigns"])
@@ -32,10 +30,6 @@ def include_all_routes(app: FastAPI):
     
     #SOURCES RELATED ROUTES
     app.include_router(sources.router, prefix="/sources",tags=["sources"])
-    
-    
-    
-    
     
     # app.include_router(reports.router, prefix="/reports", tags=["Reports"])
     # app.include_router(settings.router, prefix="/settings", tags=["Settings"])
