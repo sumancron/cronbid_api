@@ -40,11 +40,11 @@ async def fetch_app_details(package_id: str) -> AppDetails:
     # Return Android app if found
     if gplay_data and gplay_data.get("title"):
         return AppDetails(
-            name=gplay_data.get("title"),
-            icon=gplay_data.get("icon"),
-            description=gplay_data.get("description"),
-            developer=gplay_data.get("developer"),
-            store_url=gplay_data.get("url"),
+            name=str(gplay_data.get("title")),
+            icon=str(gplay_data.get("icon")),
+            description=str(gplay_data.get("description")),
+            developer=str(gplay_data.get("developer")),
+            store_url=str(gplay_data.get("url")),
             os="android",
             device="mobile"
         )
