@@ -26,8 +26,8 @@ async def create_or_update_sub2_status(
     campaign_id: int,
     source_id: int,
     sub2: str,
-    source_name:str,
-    campaign_name:str
+    source_name: str,
+    campaign_name: str
 ):
     try:
         pool = await Database.connect()
@@ -35,8 +35,8 @@ async def create_or_update_sub2_status(
             async with conn.cursor() as cur:
                 # Check if record exists
                 check_query = """
-                SELECT id FROM sub2_status 
-                WHERE campaign_id = %s AND source_id = %s AND sub2 = %s
+                    SELECT id FROM sub2_status 
+                    WHERE campaign_id = %s AND source_id = %s AND sub2 = %s
                 """
                 await cur.execute(check_query, (campaign_id, source_id, sub2))
                 existing_record = await cur.fetchone()
@@ -44,26 +44,27 @@ async def create_or_update_sub2_status(
                 if existing_record:
                     # Update existing record
                     update_query = """
-                    UPDATE sub2_status 
-                    SET status = %s 
-                    WHERE campaign_id = %s AND source_id = %s AND sub2 = %s
+                        UPDATE sub2_status 
+                        SET status = %s 
+                        WHERE campaign_id = %s AND source_id = %s AND sub2 = %s
                     """
                     await cur.execute(update_query, (status, campaign_id, source_id, sub2))
                     message = "Status updated successfully"
                 else:
                     # Insert new record
                     insert_query = """
-                    INSERT INTO sub2_status (status, campaign_id, source_id, sub2,source_name,campaign_name) 
-                    VALUES (%s, %s, %s, %s, %s,%s)
+                        INSERT INTO sub2_status (status, campaign_id, source_id, sub2, source_name, campaign_name) 
+                        VALUES (%s, %s, %s, %s, %s, %s)
                     """
-                    await cur.execute(insert_query, (status, campaign_id, source_id, sub2))
+                    await cur.execute(insert_query, (status, campaign_id, source_id, sub2, source_name, campaign_name))
                     message = "Status created successfully"
-                
+
                 await conn.commit()
-                
+
                 # Send email notification
                 send_sub2_status_notification(status, campaign_id, source_id, sub2, source_name, campaign_name)
-                
+
         return {"status": "success", "message": message}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
