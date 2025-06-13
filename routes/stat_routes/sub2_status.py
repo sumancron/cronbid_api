@@ -3,6 +3,7 @@ from database import Database
 from auth import verify_api_key
 import aiomysql
 from typing import Optional
+from utils.send_auth_mails import send_sub2_status_notification
 
 router = APIRouter()
 
@@ -24,7 +25,9 @@ async def create_or_update_sub2_status(
     status: str,
     campaign_id: int,
     source_id: int,
-    sub2: str
+    sub2: str,
+    source_name:str,
+    campaign_name:str
 ):
     try:
         pool = await Database.connect()
@@ -50,13 +53,16 @@ async def create_or_update_sub2_status(
                 else:
                     # Insert new record
                     insert_query = """
-                    INSERT INTO sub2_status (status, campaign_id, source_id, sub2) 
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO sub2_status (status, campaign_id, source_id, sub2,source_name,campaign_name) 
+                    VALUES (%s, %s, %s, %s, %s,%s)
                     """
                     await cur.execute(insert_query, (status, campaign_id, source_id, sub2))
                     message = "Status created successfully"
                 
                 await conn.commit()
+                
+                # Send email notification
+                send_sub2_status_notification(status, campaign_id, source_id, sub2, source_name, campaign_name)
                 
         return {"status": "success", "message": message}
     except Exception as e:

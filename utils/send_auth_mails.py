@@ -59,3 +59,48 @@ def send_email(to_email: str, subject: str, html_content: str):
 
     except Exception as e:
         print(f"Email sending failed: {e}")
+
+def send_partner_status_notification(status: str, source_id: int, campaign_id: int, source_name:str, campaign_name:str):
+    subject = f"{APP_NAME} - Partner Status Update"
+    html_content = f"""
+    <html>
+    <body style="background: linear-gradient(to bottom, #142c54, #1d179b); color: white; font-family: Arial, sans-serif; padding: 40px;">
+        <div style="max-width: 600px; margin: auto; text-align: center;">
+            <img src="{LOGO_URL}" alt="CRONBID Logo" style="width: 150px; margin-bottom: 30px;" />
+            <h2>Partner Status Update</h2>
+            <p>A partner status has been {'updated' if status else 'created'}.</p>
+            <ul style="list-style: none; padding: 0;">
+                <li><strong>Status:</strong> {status}</li>
+                <li><strong>Source ID:</strong> {source_id} {source_name}</li>
+                <li><strong>Campaign ID:</strong> {campaign_id} {campaign_name}</li>
+            </ul>
+            <br />
+            <p>Regards,<br /><strong>{APP_NAME} Team</strong></p>
+        </div>
+    </body>
+    </html>
+    """
+    send_email(ADMIN_EMAIL, subject, html_content)
+
+def send_sub2_status_notification(status: str, campaign_id: int, source_id: int, sub2: str,source_name:str,campaign_name:str):
+    subject = f"{APP_NAME} - Sub2 Status Update"
+    html_content = f"""
+    <html>
+    <body style="background: linear-gradient(to bottom, #142c54, #1d179b); color: white; font-family: Arial, sans-serif; padding: 40px;">
+        <div style="max-width: 600px; margin: auto; text-align: center;">
+            <img src="{LOGO_URL}" alt="CRONBID Logo" style="width: 150px; margin-bottom: 30px;" />
+            <h2>Sub2 Status Update</h2>
+            <p>A sub2 status has been {'updated' if status else 'created'}.</p>
+            <ul style="list-style: none; padding: 0;">
+                <li><strong>Status:</strong> {status}</li>
+                <li><strong>Campaign ID:</strong> {campaign_id} {campaign_name}</li>
+                <li><strong>Source ID:</strong> {source_id} {source_name}</li>
+                <li><strong>Sub2:</strong> {sub2}</li>
+            </ul>
+            <br />
+            <p>Regards,<br /><strong>{APP_NAME} Team</strong></p>
+        </div>
+    </body>
+    </html>
+    """
+    send_email(ADMIN_EMAIL, subject, html_content)

@@ -3,6 +3,7 @@ from database import Database
 from auth import verify_api_key
 import aiomysql
 from typing import Optional
+from utils.send_auth_mails import send_partner_status_notification
 
 router = APIRouter()
 
@@ -23,7 +24,9 @@ async def get_partner_status():
 async def create_or_update_partner_status(
     status: str,
     source_id: int,
-    campaign_id: int
+    campaign_id: int,
+    source_name:str,
+    campaign_name:str
 ):
     try:
         pool = await Database.connect()
@@ -49,13 +52,16 @@ async def create_or_update_partner_status(
                 else:
                     # Insert new record
                     insert_query = """
-                    INSERT INTO partner_status (status, source_id, campaign_id) 
-                    VALUES (%s, %s, %s)
+                    INSERT INTO partner_status (status, source_id, campaign_id,source_name,campaign_name) 
+                    VALUES (%s, %s, %s, %s, %s)
                     """
                     await cur.execute(insert_query, (status, source_id, campaign_id))
                     message = "Status created successfully"
                 
                 await conn.commit()
+                
+                # Send email notification
+                send_partner_status_notification(status, source_id, campaign_id, source_name, campaign_name)
                 
         return {"status": "success", "message": message}
     except Exception as e:
