@@ -6,6 +6,7 @@ from .operationroutes.campaigns import add_campaigns, campaigns, campaign_status
 from .operationroutes.funds import funds,add_funds
 from .operationroutes.sources import sources
 from .userroutes import user_details
+from .stat_routes import partner_status, sub2_status  # Add this import
 
 # campaigns, funds, reports, settings, dashboard, auth, external_apis
 
@@ -34,6 +35,10 @@ def include_all_routes(app: FastAPI):
 
     # USER Routes
     app.include_router(user_details.router,prefix="/user",tags=["user"])
+
+    #Partner status routes
+    app.include_router(partner_status.router, prefix="/partnerstatus", tags=["partner-Status"])
+    app.include_router(sub2_status.router, prefix="/sub2status", tags=["sub2-Status"])
     
     # app.include_router(reports.router, prefix="/reports", tags=["Reports"])
     # app.include_router(settings.router, prefix="/settings", tags=["Settings"])
