@@ -116,7 +116,7 @@ async def activate_campaign(campaign_id: str, request: Request):
                 try:
                     await cur.execute("""
                         SELECT u.email, 
-                               JSON_UNQUOTE(JSON_EXTRACT(c.campaign_details, '$.campaign_title')) as campaign_title
+                               JSON_UNQUOTE(JSON_EXTRACT(c.campaign_details, '$.campaignTitle')) as campaign_title
                         FROM cronbid_campaigns c
                         JOIN cronbid_users u ON c.created_by = u.user_id
                         WHERE c.campaign_id = %s
