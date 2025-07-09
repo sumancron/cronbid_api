@@ -155,9 +155,21 @@ def process_targeting_data(targeting: dict, existing_targeting=None) -> dict:
             "formData": {}
         }
     
-    # Extract the country selections and form data
-    country_selections = targeting.get("countrySelections", [])
-    form_data = targeting.get("formData", {})
+    country_selections = []
+    for entry in targeting.get("countrySelections", []):
+        country_name = entry.get("selectedCountry", {}).get("country", "")
+        if not country_name:
+            continue
+            
+        country_selections.append({
+            "country": country_name,
+            "includedStates": entry.get("includedStates", []),
+            "excludedStates": entry.get("excludedStates", [])
+        })
+    
+    # Use formData from request or existing data
+    form_data = targeting.get("formData", existing_targeting.get("formData", {}) 
+                             if existing_targeting else {})
     
     # Initialize processed country selections
     processed_countries = []

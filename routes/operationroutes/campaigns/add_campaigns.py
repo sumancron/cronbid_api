@@ -120,57 +120,38 @@ async def save_media_files(creatives_data: dict, user_id: str, campaign_id: str)
 
     return {**creatives_data, "files": processed_files}
 
-def process_targeting_data(targeting: dict) -> list:
-    """Process and structure targeting data"""
-    processed = []
+def process_targeting_data(targeting: dict) -> dict:
+    """Process and structure targeting data for insertion"""
+    if not targeting:
+        return {
+            "countrySelections": [],
+            "formData": {}
+        }
     
-    # Handle case where targeting might be empty or invalid
-    if not targeting or not isinstance(targeting, dict):
-        return processed
-    
-    # Get the array of country selections
-    country_selections = targeting.get("countrySelections", [])
-    if not isinstance(country_selections, list):
-        return processed
-    
-    for entry in country_selections:
-        # Skip if entry is not a dictionary
-        if not isinstance(entry, dict):
+    # Extract country selections in the required format
+    country_selections = []
+    for entry in targeting.get("countrySelections", []):
+        country_name = entry.get("selectedCountry", {}).get("country", "")
+        if not country_name:
             continue
             
-        # Initialize with empty values
-        country_data = {
-            "country": "",
-            "includedStates": [],
-            "excludedStates": []
-        }
-        
-        # Get selected country if available
-        selected_country = entry.get("selectedCountry", {})
-        if isinstance(selected_country, dict):
-            country_data["country"] = selected_country.get("country", "")
-        
-        # Get included states if available
-        included_states = entry.get("includedStates", [])
-        if isinstance(included_states, list):
-            country_data["includedStates"] = [state for state in included_states if isinstance(state, str)]
-        
-        # Get excluded states if available
-        excluded_states = entry.get("excludedStates", [])
-        if isinstance(excluded_states, list):
-            country_data["excludedStates"] = [state for state in excluded_states if isinstance(state, str)]
-        
-        # Only add if we have at least a country name
-        if country_data["country"]:
-            processed.append(country_data)
+        country_selections.append({
+            "country": country_name,
+            "includedStates": entry.get("includedStates", []),
+            "excludedStates": entry.get("excludedStates", [])
+        })
     
-    return processed
+    return {
+        "countrySelections": country_selections,
+        "formData": targeting.get("formData", {})
+    }
+
 
 @router.post("/post_campaign/", dependencies=[Depends(verify_api_key)])
 async def post_campaign(request: Request):
     try:
         data = await request.json()
-        sanitize_input(data)  # Perform recursive sanitization
+        sanitize_input(data)
 
         # Extract basic info
         user_id = data.get("user_id", "unknown")
@@ -187,6 +168,7 @@ async def post_campaign(request: Request):
 
         # Process targeting data
         targeting_data = process_targeting_data(data.get("targeting", {}))
+        targeting_json = json.dumps(targeting_data)
 
         # Prepare JSON data for new columns
         app_details = json.dumps(data.get("appDetails", {}))
