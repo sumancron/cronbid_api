@@ -146,82 +146,79 @@ async def save_media_files(creatives_data: dict, user_id: str, campaign_id: str,
 
     return {"files": processed_files}
 
-def process_targeting_data(targeting: dict, existing_targeting=None) -> list:
-    """Process targeting data, preserving existing if new data is incomplete or invalid"""
+def process_targeting_data(targeting: dict, existing_targeting=None) -> dict:
+    """Process targeting data into the new unified format"""
+    # If no targeting data provided, return existing targeting unchanged
     if not targeting:
-        # If no targeting data provided, return existing targeting unchanged
-        return existing_targeting if existing_targeting else []
+        return existing_targeting or {
+            "countrySelections": [],
+            "formData": {}
+        }
     
-    # Handle case where targeting is already a list (direct targeting data)
-    if isinstance(targeting, list):
-        # Validate the list has proper structure
-        if targeting and all(isinstance(item, dict) and "country" in item for item in targeting):
-            return targeting
-        else:
-            # Invalid list structure, keep existing
-            return existing_targeting if existing_targeting else []
-
-    # Handle nested countrySelections structure
-    country_selections = targeting.get("countrySelections")
-    if not country_selections:
-        # No country selections provided, keep existing
-        return existing_targeting if existing_targeting else []
-
-    # Handle case where countrySelections is a list instead of dict
-    if isinstance(country_selections, list):
-        # Validate the list structure
-        if country_selections and all(isinstance(item, dict) and "country" in item for item in country_selections):
-            return country_selections
-        else:
-            # Invalid structure, keep existing
-            return existing_targeting if existing_targeting else []
-
-    # Handle case where countrySelections is a dict
-    if isinstance(country_selections, dict):
-        # Extract the actual targeting data
+    # Extract the country selections and form data
+    country_selections = targeting.get("countrySelections", [])
+    form_data = targeting.get("formData", {})
+    
+    # Initialize processed country selections
+    processed_countries = []
+    
+    # If countrySelections is already in the backend format (array of countries)
+    if isinstance(country_selections, list) and country_selections:
+        # Check if it's already in the correct format
+        if all(isinstance(item, dict) and "country" in item for item in country_selections):
+            # Already in correct format
+            processed_countries = country_selections
+    
+    # If countrySelections is in the frontend format (with selectedCountries, includedStates, etc.)
+    elif isinstance(country_selections, dict):
         selected_countries = country_selections.get("selectedCountries", [])
         included_states = country_selections.get("includedStates", [])
         excluded_states = country_selections.get("excludedStates", [])
 
-        # If no countries selected and no states specified, keep existing
-        if not selected_countries and not included_states and not excluded_states:
-            return existing_targeting if existing_targeting else []
+        # Only process if we have selected countries
+        if selected_countries:
+            # Group states by country
+            country_states = {}
+            for country in selected_countries:
+                country_states[country] = {
+                    "includedStates": [],
+                    "excludedStates": []
+                }
 
-        # Group states by country
-        country_states = {}
-        for country in selected_countries:
-            country_states[country] = {
-                "includedStates": [],
-                "excludedStates": []
-            }
+            # Add included states
+            for state_info in included_states:
+                if isinstance(state_info, dict) and "country" in state_info and "state" in state_info:
+                    country = state_info["country"]
+                    if country in country_states:
+                        country_states[country]["includedStates"].append(state_info["state"])
 
-        # Add included states
-        for state_info in included_states:
-            if isinstance(state_info, dict) and "country" in state_info and "state" in state_info:
-                country = state_info["country"]
-                if country in country_states:
-                    country_states[country]["includedStates"].append(state_info["state"])
+            # Add excluded states
+            for state_info in excluded_states:
+                if isinstance(state_info, dict) and "country" in state_info and "state" in state_info:
+                    country = state_info["country"]
+                    if country in country_states:
+                        country_states[country]["excludedStates"].append(state_info["state"])
 
-        # Add excluded states
-        for state_info in excluded_states:
-            if isinstance(state_info, dict) and "country" in state_info and "state" in state_info:
-                country = state_info["country"]
-                if country in country_states:
-                    country_states[country]["excludedStates"].append(state_info["state"])
-
-        # Create final processed list
-        processed = []
-        for country in selected_countries:
-            processed.append({
-                "country": country,
-                "includedStates": country_states[country]["includedStates"],
-                "excludedStates": country_states[country]["excludedStates"]
-            })
-
-        return processed if processed else (existing_targeting if existing_targeting else [])
+            # Create final processed list
+            for country in selected_countries:
+                processed_countries.append({
+                    "country": country,
+                    "includedStates": country_states[country]["includedStates"],
+                    "excludedStates": country_states[country]["excludedStates"]
+                })
     
-    # If we can't handle the format, keep existing
-    return existing_targeting if existing_targeting else []
+    # If we couldn't process new country selections, use existing ones if available
+    if not processed_countries and existing_targeting:
+        processed_countries = existing_targeting.get("countrySelections", [])
+    
+    # Merge form data with existing if available
+    if existing_targeting and not form_data:
+        form_data = existing_targeting.get("formData", {})
+    
+    return {
+        "countrySelections": processed_countries,
+        "formData": form_data
+    }
 
 def compare_json_fields(new_data, old_data):
     """Compare JSON fields and return True if different"""
@@ -257,33 +254,38 @@ def safe_get_nested_value(data: dict, key: str, default=None):
 def has_valid_targeting_data(targeting_data):
     """Check if targeting data is valid and should be processed"""
     if not targeting_data or not isinstance(targeting_data, dict):
+        print("[DEBUG] Invalid: No targeting data or not a dict")
         return False
     
-    # Check if it has the isValid flag set to True (from frontend validation)
+    # Check if it has the isValid flag set to True
     if targeting_data.get("isValid") is not True:
+        print("[DEBUG] Invalid: isValid is not True")
         return False
     
     # Check if it has actual targeting content
     country_selections = targeting_data.get("countrySelections")
     if not country_selections:
+        print("[DEBUG] Invalid: No countrySelections found")
         return False
     
     # If it's a dict with actual selection data
     if isinstance(country_selections, dict):
         selected_countries = country_selections.get("selectedCountries", [])
-        included_states = country_selections.get("includedStates", [])
-        excluded_states = country_selections.get("excludedStates", [])
-        
-        # Has valid data if there are countries selected
+        if not selected_countries:
+            print("[DEBUG] Invalid: No countries selected in dict format")
         return bool(selected_countries)
     
-    # If it's a list, check if it has valid content
+    # If it's a list (backend format)
     if isinstance(country_selections, list):
-        return len(country_selections) > 0 and all(
-            isinstance(item, dict) and "country" in item 
-            for item in country_selections
-        )
+        if len(country_selections) == 0:
+            print("[DEBUG] Invalid: Empty country selections list")
+            return False
+        if not all(isinstance(item, dict) and "country" in item for item in country_selections):
+            print("[DEBUG] Invalid: Malformed country selections in list")
+            return False
+        return True
     
+    print("[DEBUG] Invalid: Unrecognized countrySelections format")
     return False
 
 @router.put("/update_campaign/{campaign_id}", dependencies=[Depends(verify_api_key)])
@@ -311,7 +313,23 @@ async def update_campaign(campaign_id: str, request: Request):
             existing_creatives = json.loads(existing.get("creatives", "[]"))
             existing_conversion_flow = json.loads(existing.get("conversion_flow", "{}"))
             existing_budget = json.loads(existing.get("budget", "{}"))
-            existing_targeting = json.loads(existing.get("targeting", "[]"))
+            
+            # Handle existing targeting - convert to new format if needed
+            existing_targeting_raw = existing.get("targeting", "{}")
+            try:
+                existing_targeting = json.loads(existing_targeting_raw)
+                # Convert old format to new format if needed
+                if isinstance(existing_targeting, list):
+                    existing_targeting = {
+                        "countrySelections": existing_targeting,
+                        "formData": {}
+                    }
+            except:
+                existing_targeting = {
+                    "countrySelections": [],
+                    "formData": {}
+                }
+                
             existing_source = json.loads(existing.get("source", "{}"))
 
             # 4) Process only provided sections with meaningful changes
