@@ -157,7 +157,7 @@ def process_targeting_data(targeting: dict, existing_targeting=None) -> dict:
     
     country_selections = []
     for entry in targeting.get("countrySelections", []):
-        country_name = entry.get("selectedCountry", {}).get("country", "")
+        country_name = entry.get("selectedCountry", "")
         if not country_name:
             continue
             
@@ -287,14 +287,25 @@ def has_valid_targeting_data(targeting_data):
             print("[DEBUG] Invalid: No countries selected in dict format")
         return bool(selected_countries)
     
-    # If it's a list (backend format)
+    # If it's a list (frontend format with selectedCountry field)
     if isinstance(country_selections, list):
         if len(country_selections) == 0:
             print("[DEBUG] Invalid: Empty country selections list")
             return False
-        if not all(isinstance(item, dict) and "country" in item for item in country_selections):
-            print("[DEBUG] Invalid: Malformed country selections in list")
+        
+        # Check for frontend format (selectedCountry field) or backend format (country field)
+        valid_items = []
+        for item in country_selections:
+            if isinstance(item, dict):
+                # Check for frontend format (selectedCountry) or backend format (country)
+                if "selectedCountry" in item or "country" in item:
+                    valid_items.append(item)
+        
+        if not valid_items:
+            print("[DEBUG] Invalid: No valid country selections found in list")
             return False
+        
+        print(f"[DEBUG] Valid: Found {len(valid_items)} valid country selections")
         return True
     
     print("[DEBUG] Invalid: Unrecognized countrySelections format")

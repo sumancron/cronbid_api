@@ -131,14 +131,16 @@ def process_targeting_data(targeting: dict) -> dict:
     # Extract country selections in the required format
     country_selections = []
     for entry in targeting.get("countrySelections", []):
-        country_name = entry.get("selectedCountry", {}).get("country", "")
+        # Handle selectedCountry as a direct string (not an object)
+        country_name = entry.get("selectedCountry", "")
         if not country_name:
             continue
             
         country_selections.append({
             "country": country_name,
             "includedStates": entry.get("includedStates", []),
-            "excludedStates": entry.get("excludedStates", [])
+            "excludedStates": entry.get("excludedStates", []),
+            # "stateTargeting": entry.get("stateTargeting", "")  # Add this if you want to preserve the targeting type
         })
     
     return {
