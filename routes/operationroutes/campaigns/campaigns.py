@@ -49,7 +49,6 @@ async def get_campaigns(
                 await cur.execute(query, values)
                 rows = await cur.fetchall()
 
-        # Modify conversion_flow by adding 'payout' = 'amount'
         for row in rows:
             if "conversion_flow" in row and row["conversion_flow"]:
                 try:
@@ -58,25 +57,25 @@ async def get_campaigns(
                         cf["payout"] = cf["amount"]
                         row["conversion_flow"] = json.dumps(cf)
                 except json.JSONDecodeError:
-                    pass  # Skip if conversion_flow is not valid JSON
+                    pass
 
-            # TEMP: Modify targeting to show only old-style countrySelections
             if "targeting" in row and row["targeting"]:
                 try:
                     targeting_data = json.loads(row["targeting"])
+                    # Move the full targeting object to "advanced_targeting"
+                    row["advanced_targeting"] = json.dumps(targeting_data)
                     if isinstance(targeting_data, dict) and "countrySelections" in targeting_data:
                         simplified = targeting_data["countrySelections"]
                         row["targeting"] = json.dumps(simplified)
                 except json.JSONDecodeError:
-                    pass  # Leave it unchanged if invalid
-
+                    # If the initial targeting data is not valid JSON, leave it as is
+                    pass
 
         return {"campaigns": rows}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-    
+
     
 # from fastapi import APIRouter, Depends, HTTPException, Query
 # from database import Database
