@@ -59,23 +59,29 @@ async def get_campaigns(
                 except json.JSONDecodeError:
                     pass
 
+            # Handling the main targeting column
             if "targeting" in row and row["targeting"]:
                 try:
                     targeting_data = json.loads(row["targeting"])
-                    # Move the full targeting object to "advanced_targeting"
+                    # Use the entire JSON object for `advanced_targeting`
                     row["advanced_targeting"] = json.dumps(targeting_data)
+                    # For backward compatibility, `targeting` stores only the country selections
                     if isinstance(targeting_data, dict) and "countrySelections" in targeting_data:
                         simplified = targeting_data["countrySelections"]
                         row["targeting"] = json.dumps(simplified)
                 except json.JSONDecodeError:
-                    # If the initial targeting data is not valid JSON, leave it as is
-                    pass
+                    # If the JSON is invalid, provide empty defaults
+                    row["advanced_targeting"] = "{}"
+                    row["targeting"] = "[]"
+            else:
+                # If the targeting column is empty or null, provide empty defaults
+                row["advanced_targeting"] = "{}"
+                row["targeting"] = "[]"
 
         return {"campaigns": rows}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+        raise HTTPException(status_code=500, detail=f"API Error: {str(e)}")
     
 # from fastapi import APIRouter, Depends, HTTPException, Query
 # from database import Database

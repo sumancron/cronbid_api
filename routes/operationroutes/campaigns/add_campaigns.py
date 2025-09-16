@@ -19,7 +19,8 @@ ALLOWED_MIME_TYPES = {
     "image/png": ".png",
     "image/gif": ".gif",
     "video/mp4": ".mp4",
-    "video/quicktime": ".mov"
+    "video/quicktime": ".mov",
+    "text/csv": ".csv"
 }
 
 def is_malicious_input(value: str) -> bool:
@@ -59,8 +60,8 @@ def get_file_extension(mime_type: str) -> str:
     """Get file extension from MIME type with validation"""
     return ALLOWED_MIME_TYPES.get(mime_type.split(';')[0].strip(), None)
 
-async def save_media_files(creatives_data: dict, user_id: str, campaign_id: str) -> dict:
-    """Process and save media files to filesystem"""
+async def save_media_files(creatives_data: dict, user_id: str, campaign_id: str, subdir: str = "") -> dict:
+    """Process and save media files to filesystem with optional subdirectory"""
     if not creatives_data.get("files"):
         return creatives_data
 
@@ -93,8 +94,9 @@ async def save_media_files(creatives_data: dict, user_id: str, campaign_id: str)
                 raise ValueError("Invalid base64 encoding")
 
             # Create directory structure
-            user_dir = os.path.join(UPLOADS_DIR, user_id)
-            campaign_dir = os.path.join(user_dir, campaign_id)
+            campaign_dir = os.path.join(UPLOADS_DIR, user_id, campaign_id)
+            if subdir:
+                campaign_dir = os.path.join(campaign_dir, subdir)
             os.makedirs(campaign_dir, exist_ok=True)
 
             # Generate unique filename
@@ -106,10 +108,11 @@ async def save_media_files(creatives_data: dict, user_id: str, campaign_id: str)
                 f.write(file_bytes)
 
             # Update file entry with relative path
+            processed_file_path = os.path.join(user_id, campaign_id, subdir, filename) if subdir else os.path.join(user_id, campaign_id, filename)
             processed_files.append({
                 **file,
-                "fileData": f"{user_id}/{campaign_id}/{filename}",
-                "filePath": f"/campaignsmedia/{user_id}/{campaign_id}/{filename}"
+                "fileData": processed_file_path,
+                "filePath": f"/campaignsmedia/{processed_file_path}"
             })
 
         except Exception as e:
@@ -120,18 +123,51 @@ async def save_media_files(creatives_data: dict, user_id: str, campaign_id: str)
 
     return {**creatives_data, "files": processed_files}
 
+async def process_audience_targeting_data(audience_targeting: dict, user_id: str, campaign_id: str) -> dict:
+    """Process and save audience targeting data"""
+    if not audience_targeting:
+        return {}
+
+    # Save uploaded files
+    uploaded_audiences = []
+    for audience in audience_targeting.get("uploadAudience", []):
+        if "fileData" in audience and audience["fileData"].startswith("data:"):
+            # This is a new file upload
+            processed_file = await save_media_files(
+                {"files": [audience]},
+                user_id,
+                campaign_id,
+                "audiences"
+            )
+            # Take the first (and only) file from the processed list
+            uploaded_audiences.append({
+                "filePath": processed_file["files"][0]["filePath"],
+                "event": audience.get("event"),
+                "isEncrypted": audience.get("isEncrypted", False),
+                "encryptionKey": audience.get("encryptionKey")
+            })
+        elif "filePath" in audience:
+            # This is an existing file, keep its path
+            uploaded_audiences.append(audience)
+
+    return {
+        "uploadAudience": uploaded_audiences,
+        "createAudience": audience_targeting.get("createAudience", []),
+        "cronAudience": audience_targeting.get("cronAudience", "Disabled")
+    }
+
 def process_targeting_data(targeting: dict) -> dict:
-    """Process and structure targeting data for insertion"""
+    """Process and structure targeting data for insertion, including audience targeting"""
     if not targeting:
         return {
             "countrySelections": [],
-            "formData": {}
+            "formData": {},
+            "audienceTargeting": {},
         }
     
     # Extract country selections in the required format
     country_selections = []
     for entry in targeting.get("countrySelections", []):
-        # Handle selectedCountry as a direct string (not an object)
         country_name = entry.get("selectedCountry", "")
         if not country_name:
             continue
@@ -140,14 +176,13 @@ def process_targeting_data(targeting: dict) -> dict:
             "country": country_name,
             "includedStates": entry.get("includedStates", []),
             "excludedStates": entry.get("excludedStates", []),
-            # "stateTargeting": entry.get("stateTargeting", "")  # Add this if you want to preserve the targeting type
         })
     
     return {
         "countrySelections": country_selections,
-        "formData": targeting.get("formData", {})
+        "formData": targeting.get("formData", {}),
+        "audienceTargeting": targeting.get("audienceTargeting", {}), # Add the new key here
     }
-
 
 @router.post("/post_campaign/", dependencies=[Depends(verify_api_key)])
 async def post_campaign(request: Request):
@@ -168,17 +203,27 @@ async def post_campaign(request: Request):
             campaign_id
         )
 
-        # Process targeting data
-        targeting_data = process_targeting_data(data.get("targeting", {}))
-        targeting_json = json.dumps(targeting_data)
+        # Process new audience targeting data first to handle file uploads
+        audience_targeting_data = await process_audience_targeting_data(
+            data.get("targeting", {}).get("audienceTargeting", {}),
+            user_id,
+            campaign_id
+        )
 
-        # Prepare JSON data for new columns
+        # Prepare the combined targeting object for storage in the 'targeting' column
+        full_targeting_data = {
+            "countrySelections": data.get("targeting", {}).get("countrySelections", []),
+            "formData": data.get("targeting", {}).get("formData", {}),
+            "audienceTargeting": audience_targeting_data
+        }
+        
+        # Prepare JSON data for DB insertion
         app_details = json.dumps(data.get("appDetails", {}))
         budget = json.dumps(data.get("budget", {}))
         campaign_details = json.dumps(data.get("campaignDetails", {}))
         conversion_flow = json.dumps(data.get("conversionFlow", {}))
         source_json = json.dumps(data.get("source", {}))
-        targeting_json = json.dumps(targeting_data)
+        targeting_json = json.dumps(full_targeting_data) # Use the combined data here
 
         # Prepare DB values
         values = (
@@ -190,7 +235,7 @@ async def post_campaign(request: Request):
             json.dumps(creatives.get("files", [])),  # creatives remains as-is
             conversion_flow,
             budget,
-            targeting_json,
+            targeting_json, # Correct column
             source_json,
             user_id,
             log_id
@@ -199,8 +244,7 @@ async def post_campaign(request: Request):
         query = """
         INSERT INTO cronbid_campaigns (
             campaign_id, brand, brand_name, app_details, campaign_details,
-            creatives, conversion_flow, budget, targeting,
-            source, created_by, log_id
+            creatives, conversion_flow, budget, targeting, source, created_by, log_id
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
