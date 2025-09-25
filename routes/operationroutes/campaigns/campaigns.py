@@ -60,23 +60,35 @@ async def get_campaigns(
                     pass
 
             # Handling the main targeting column
+            # Handling the main targeting column
             if "targeting" in row and row["targeting"]:
                 try:
                     targeting_data = json.loads(row["targeting"])
-                    # Use the entire JSON object for `advanced_targeting`
+                    # Keep the full raw JSON for advanced_targeting
                     row["advanced_targeting"] = json.dumps(targeting_data)
-                    # For backward compatibility, `targeting` stores only the country selections
+
+                    # Extract only countrySelections and simplify
                     if isinstance(targeting_data, dict) and "countrySelections" in targeting_data:
-                        simplified = targeting_data["countrySelections"]
+                        simplified = []
+                        for item in targeting_data["countrySelections"]:
+                            simplified.append({
+                                "country": item.get("country"),
+                                "excludedStates": item.get("excludedStates", []),
+                                "includedStates": item.get("includedStates", [])
+                            })
                         row["targeting"] = json.dumps(simplified)
+                    else:
+                        row["targeting"] = "[]"
+
                 except json.JSONDecodeError:
-                    # If the JSON is invalid, provide empty defaults
+                    # Invalid JSON → fallback
                     row["advanced_targeting"] = "{}"
                     row["targeting"] = "[]"
             else:
-                # If the targeting column is empty or null, provide empty defaults
+                # Empty/null targeting
                 row["advanced_targeting"] = "{}"
                 row["targeting"] = "[]"
+
 
         return {"campaigns": rows}
 
