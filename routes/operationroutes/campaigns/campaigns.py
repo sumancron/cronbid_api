@@ -61,33 +61,44 @@ async def get_campaigns(
 
             # Handling the main targeting column
             # Handling the main targeting column
+             # Handling the main targeting column
             if "targeting" in row and row["targeting"]:
                 try:
                     targeting_data = json.loads(row["targeting"])
-                    # Keep the full raw JSON for advanced_targeting
+
+                    # Keep original in advanced_targeting
                     row["advanced_targeting"] = json.dumps(targeting_data)
 
-                    # Extract only countrySelections and simplify
+                    simplified = []
+
+                    # Case 1: targeting is a dict with countrySelections
                     if isinstance(targeting_data, dict) and "countrySelections" in targeting_data:
-                        simplified = []
                         for item in targeting_data["countrySelections"]:
                             simplified.append({
                                 "country": item.get("country"),
                                 "excludedStates": item.get("excludedStates", []),
                                 "includedStates": item.get("includedStates", [])
                             })
-                        row["targeting"] = json.dumps(simplified)
-                    else:
-                        row["targeting"] = "[]"
+
+                    # Case 2: targeting is already a list of simplified dicts
+                    elif isinstance(targeting_data, list):
+                        for item in targeting_data:
+                            simplified.append({
+                                "country": item.get("country"),
+                                "excludedStates": item.get("excludedStates", []),
+                                "includedStates": item.get("includedStates", [])
+                            })
+
+                    # If nothing matched → default empty
+                    row["targeting"] = json.dumps(simplified if simplified else [])
 
                 except json.JSONDecodeError:
-                    # Invalid JSON → fallback
                     row["advanced_targeting"] = "{}"
                     row["targeting"] = "[]"
             else:
-                # Empty/null targeting
                 row["advanced_targeting"] = "{}"
                 row["targeting"] = "[]"
+
 
 
         return {"campaigns": rows}
