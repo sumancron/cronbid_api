@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from .authroutes import authentication
 from .serviceroutes import app_details_route,get_tables
 from .operationroutes.brands import brands, add_brands, update_brands
-from .operationroutes.campaigns import add_campaigns, campaigns, campaign_status, update_campaigns
+from .operationroutes.campaigns import add_campaigns, campaigns, campaign_status, update_campaigns, audience_sync
 from .operationroutes.funds import funds,add_funds
 from .operationroutes.sources import sources
 from .userroutes import user_details
@@ -25,6 +25,9 @@ def include_all_routes(app: FastAPI):
     app.include_router(add_campaigns.router, prefix="/add_campaigns", tags=["add_campaigns"])
     app.include_router(campaign_status.router, prefix="/campaign_status", tags=["Campaign Status"])
     app.include_router(update_campaigns.router, prefix="/update_campaigns", tags=["Update Campaigns"])
+    
+    # NEW AUDIENCE SYNC INTEGRATION ROUTES (Uniform Base Path)
+    app.include_router(audience_sync.router, prefix="/audience-sync", tags=["Audience Sync Integration"])
     
     #FUNDS RELATED ROUTES
     app.include_router(funds.router, prefix="/funds", tags=["Funds"])
