@@ -1,15 +1,25 @@
 # routes/operationroutes/campaigns/audience_sync.py
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from database import Database
-from auth import verify_api_key
+# NOTE: We keep verify_api_key import but don't use it directly on the router posts
 import aiomysql
 import json
 import os
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 router = APIRouter()
+
+# --- PARTNER API KEY CONFIGURATION ---
+PARTNER_AUDIENCE_API_KEY = "787febebhevdhhvedh787dederrr"
+
+async def verify_partner_api_key(x_api_key: Optional[str] = Header(None)):
+    """Dependency to verify the partner's unique API key."""
+    if x_api_key != PARTNER_AUDIENCE_API_KEY:
+        # Deny access if the key is missing or incorrect
+        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key for Audience Sync Partner.")
+    return True
 
 # --- FILE-BASED STORAGE CONFIGURATION ---
 # Store the sync state in a dedicated local directory to avoid touching the DB.
@@ -27,7 +37,8 @@ async def read_sync_file(campaign_id: str) -> Dict[str, Any]:
     if not os.path.exists(file_path):
         return {}
     try:
-        async with open(file_path, 'r', encoding='utf-8') as f:
+        # Use standard open/read as this is outside of the DB pool
+        with open(file_path, 'r', encoding='utf-8') as f:
             return json.loads(f.read())
     except Exception as e:
         print(f"[ERROR] Failed to read sync file for {campaign_id}: {e}")
@@ -37,7 +48,6 @@ async def write_sync_file(campaign_id: str, data: Dict[str, Any]):
     """Writes or overwrites sync data to the JSON file."""
     file_path = get_sync_file_path(campaign_id)
     try:
-        # We use standard open/write here, assuming the operation is quick
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4)
     except Exception as e:
@@ -56,10 +66,10 @@ async def check_campaign_exists(campaign_id: str) -> bool:
             return bool(await cur.fetchone())
 
 # ====================================================================
-# 1. /Validate Endpoint (POST) - SAFE (SELECT ONLY)
+# 1. /Validate Endpoint (POST) - SECURED with verify_partner_api_key
 # ====================================================================
 
-@router.post("/validate", dependencies=[Depends(verify_api_key)])
+@router.post("/validate", dependencies=[Depends(verify_partner_api_key)])
 async def validate_audience_connection(request: Request):
     """
     Validates connection and the existence of the campaign_id in the database.
@@ -74,9 +84,6 @@ async def validate_audience_connection(request: Request):
         if not await check_campaign_exists(campaign_id):
              raise HTTPException(status_code=404, detail=f"Campaign ID '{campaign_id}' not found.")
         
-        # Optionally, you can perform more detailed validation logic here 
-        # using the campaign data from the DB if needed.
-
         return {
             "success": True,
             "message": "Connection and campaign ID validated successfully.",
@@ -92,10 +99,10 @@ async def validate_audience_connection(request: Request):
         )
 
 # ====================================================================
-# 2. /Create Endpoint (POST) - DB READ-ONLY, WRITES TO JSON FILE
+# 2. /Create Endpoint (POST) - SECURED with verify_partner_api_key
 # ====================================================================
 
-@router.post("/create", dependencies=[Depends(verify_api_key)])
+@router.post("/create", dependencies=[Depends(verify_partner_api_key)])
 async def create_audience_sync(request: Request):
     """
     Initializes audience sync. Registers the partner's audience ID and creates 
@@ -129,7 +136,7 @@ async def create_audience_sync(request: Request):
             "message": "Audience sync state created in local file.",
             "campaign_id": campaign_id,
             "partner_audience_id": partner_audience_id,
-            "storage_location": get_sync_file_path(campaign_id) # Informative for debugging
+            "storage_location": get_sync_file_path(campaign_id) 
         }
         
     except HTTPException:
@@ -142,10 +149,10 @@ async def create_audience_sync(request: Request):
 
 
 # ====================================================================
-# 3. /Sync Endpoint (POST) - DB READ-ONLY, WRITES TO JSON FILE
+# 3. /Sync Endpoint (POST) - SECURED with verify_partner_api_key
 # ====================================================================
 
-@router.post("/sync", dependencies=[Depends(verify_api_key)])
+@router.post("/sync", dependencies=[Depends(verify_partner_api_key)])
 async def sync_audience_data(request: Request):
     """
     Receives synchronized audience data and updates the local JSON file.
@@ -173,7 +180,6 @@ async def sync_audience_data(request: Request):
         
         # 2. Store the actual audience data in the 'synced_audience_data' field
         if "audience_data" in sync_payload:
-             # Store the actual audience data they give you
             current_data["synced_audience_data"] = sync_payload["audience_data"] 
 
         await write_sync_file(campaign_id, current_data)

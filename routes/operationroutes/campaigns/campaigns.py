@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from database import Database
 from auth import verify_api_key
 import aiomysql
@@ -201,7 +201,18 @@ def read_csv_file_content_as_json(file_path: str) -> List[dict]:
 # NEW API ENDPOINT: /get_audience_data/
 # ----------------------------------------------------------------------
 
-@router.get("/get_audience_data/", dependencies=[Depends(verify_api_key)])
+# --- PARTNER API KEY CONFIGURATION ---
+PARTNER_AUDIENCE_API_KEY = "787febebhevdhhvedh787dederrr"
+
+async def verify_partner_api_key(x_api_key: Optional[str] = Header(None)):
+    """Dependency to verify the partner's unique API key."""
+    if x_api_key != PARTNER_AUDIENCE_API_KEY:
+        # Deny access if the key is missing or incorrect
+        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key for Audience Partner Access.")
+    return True
+# -------------------------------------
+
+@router.get("/get_audience_data/", dependencies=[Depends(verify_partner_api_key)])
 async def get_audience_data(
     cron_audience_status: Optional[str] = Query(None, description="Filter by cronAudience status (e.g., 'Enabled', 'Disabled', 'Processing')"),
     has_create_audience: Optional[bool] = Query(None, description="Filter by presence of data in createAudience array"),
