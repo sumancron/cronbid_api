@@ -1,300 +1,162 @@
-# routes/operationroutes/campaigns/audience_sync.py
-
-from fastapi import APIRouter, Depends, HTTPException, Request, Header
-from database import Database
-import aiomysql
+from fastapi import APIRouter, Depends, HTTPException, Header, Body
+from pydantic import BaseModel, Field
 import json
 import os
-from datetime import datetime
-from typing import Dict, Any, Optional, Union, List
-from pydantic import BaseModel, Field # REQUIRED FOR DOCS INPUT FIELDS
 import uuid
+from typing import Optional, Dict, List
 
 router = APIRouter()
 
-# --- Pydantic Model for API Documentation and Flexible Input ---
-# This model defines the fields that will appear in the /docs UI
-class AudienceSyncInput(BaseModel):
-    # ID/campaign_id are used to locate the sync file or validate existence.
-    id: Optional[Union[int, str]] = Field(None, description="Internal campaign ID (integer or string) used to reference the campaign in our system. Optional.")
-    campaign_id: Optional[str] = Field(None, description="The unique campaign identifier (e.g., CRB-...). Optional.")
-    
-    event_name: Optional[str] = Field(None, description="The specific event name (e.g., 'purchase_complete') associated with the data being created/synced. Optional.")
-    
-    json_object: Optional[Dict[str, Any]] = Field(None, description="The core data payload from the partner (can be nested JSON, URLs, or file indicators). Optional.")
-    
-    custom_data: Optional[Dict[str, Any]] = Field(None, description="Any other custom/arbitrary key-value pairs the partner wants to send. Optional.")
-
-    class Config:
-        schema_extra = {
-            "example": {
-                "campaign_id": "CRB-1761621799-cdc358",
-                "event_name": "app_install",
-                "json_object": {
-                    "audience_size": 15000,
-                    "file_url": "https://audiencespull.appsflyer.com/partner_data.csv"
-                },
-                "custom_data": {"partner_key": "xyz123"}
-            }
-        }
-# --- END Pydantic Model ---
-
-
 # --- PARTNER API KEY CONFIGURATION ---
-PARTNER_AUDIENCE_API_KEY = "787febebhevdhhvedh787dederrr"
-
-async def verify_partner_api_key(x_api_key: Optional[str] = Header(None)):
-    """
-    Dependency to verify the partner's unique API key. 
-    (Test API-Key: 787febebhevdhhvedh787dederrr)
-    """
-    if x_api_key != PARTNER_AUDIENCE_API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key for Audience Sync Partner.")
-    return True
+# This key must match the Test API-Key you send to AppsFlyer
+PARTNER_AUDIENCE_API_KEY = "787febebhevdhhvedh787dederrr" 
 
 # --- FILE-BASED STORAGE CONFIGURATION ---
 SYNC_DATA_DIR = "sync_data/partner_audiences"
+CONTAINER_STORE_FILE = os.path.join(SYNC_DATA_DIR, "containers.json")
 os.makedirs(SYNC_DATA_DIR, exist_ok=True)
 
-def get_sync_file_path(identifier: str) -> str:
-    """Generates the absolute path for a campaign's sync state file using campaign_id or ID."""
-    safe_id = identifier if identifier else f"generic-sync-{uuid.uuid4().hex[:8]}"
-    return os.path.join(SYNC_DATA_DIR, f"{safe_id}.json")
+# Initialize container store file if it doesn't exist
+if not os.path.exists(CONTAINER_STORE_FILE):
+    with open(CONTAINER_STORE_FILE, 'w') as f:
+        json.dump({}, f)
 
-async def read_sync_file(identifier: str) -> Dict[str, Any]:
-    """Reads sync data from the JSON file."""
-    file_path = get_sync_file_path(identifier)
-    if not os.path.exists(file_path):
+# --- DEPENDENCIES ---
+
+async def verify_partner_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key", description="The Partner's unique API Key.")):
+    """
+    Dependency to verify the partner's unique API key.
+    Returns 401 if invalid, or proceeds if valid (HTTP 200 expectation).
+    """
+    if x_api_key != PARTNER_AUDIENCE_API_KEY:
+        # AppsFlyer FAQ requires 401 for invalid authentication
+        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key for Audience Sync Partner.")
+    return True
+
+# --- Pydantic Models for Schema/Docs ---
+
+# 1. /Create Models
+class AudienceCreateRequest(BaseModel):
+    name: str = Field(..., description="The unique name of the audience, as it appears in the AppsFlyer UI (2-100 characters, supports all languages/symbols).")
+    platform: Optional[str] = Field(None, description="The platform associated with the audience (e.g., 'android', 'ios').")
+    
+class AudienceCreateResponse(BaseModel):
+    container_id: str = Field(..., description="The unique ID created by the Partner (you) to reference this specific audience container.")
+
+# 2. /Sync Models
+class AudienceSyncRequest(BaseModel):
+    container_id: str = Field(..., description="The unique ID of the audience container created during the /create call.")
+    url_adid_sha256: Optional[str] = Field(None, description="Pre-signed AWS URL to download the SHA256 hashed Android/iOS (ADID/IDFA) file.")
+    url_email_sha256: Optional[str] = Field(None, description="Pre-signed AWS URL to download the SHA256 hashed Email file.")
+    url_phone_sha256: Optional[str] = Field(None, description="Pre-signed AWS URL to download the SHA256 hashed Phone Number file.")
+    # Add other potential URL identifiers as needed
+
+class AudienceSyncResponse(BaseModel):
+    message: str = "Sync request successfully received and initiated."
+    details: str = "Download process acknowledged. File download must be completed within 2 hours."
+
+# --- STORAGE UTILITY FUNCTIONS ---
+
+def _load_containers() -> Dict[str, Dict]:
+    """Loads all container mappings from the local JSON file."""
+    try:
+        with open(CONTAINER_STORE_FILE, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
         return {}
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return json.loads(f.read())
-    except Exception as e:
-        print(f"[ERROR] Failed to read sync file for {identifier}: {e}")
-        return {}
 
-async def write_sync_file(identifier: str, data: Dict[str, Any]):
-    """Writes or overwrites sync data to the JSON file."""
-    file_path = get_sync_file_path(identifier)
-    try:
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4)
-    except Exception as e:
-        print(f"[ERROR] Failed to write sync file for {identifier}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to save sync state: {e}")
+def _save_containers(data: Dict[str, Dict]):
+    """Saves the container mappings to the local JSON file."""
+    with open(CONTAINER_STORE_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
 
-# --- DB READ-ONLY HELPERS ---
+# ====================================================================
+# 1. /Validate Endpoint (POST)
+# ====================================================================
 
-async def get_campaign_details(campaign_id: Optional[str] = None, internal_id: Optional[int] = None) -> Optional[Dict]:
+@router.post(
+    "/validate", 
+    dependencies=[Depends(verify_partner_api_key)],
+    summary="1. Validate Partner API Key",
+    description="AppsFlyer calls this once when an advertiser creates a new connection. It validates the X-API-Key in the header.",
+    response_model=Dict[str, str],
+    status_code=200
+)
+async def validate_audience_connection():
     """
-    Fetches campaign details based on campaign_id or internal ID (safe, SELECT ONLY).
+    If the verify_partner_api_key dependency succeeds (returns 200), validation is complete.
     """
-    where_clauses = []
-    values = []
+    return {"status": "success", "message": "API Key is valid."}
+
+# ====================================================================
+# 2. /Create Endpoint (POST)
+# ====================================================================
+
+@router.post(
+    "/create", 
+    dependencies=[Depends(verify_partner_api_key)],
+    summary="2. Create Audience Container",
+    description="AppsFlyer calls this once per new audience to create a unique container ID on the Partner side. The Partner MUST return a 200 response containing the generated 'container_id'.",
+    response_model=AudienceCreateResponse,
+    status_code=200
+)
+async def create_audience_sync(
+    request_data: AudienceCreateRequest = Body(
+        ..., 
+        example={"name": "High-Value Users - Android"}
+    )
+):
+    # 1. Generate a unique ID for the container
+    new_container_id = str(uuid.uuid4())
     
-    if campaign_id:
-        where_clauses.append("campaign_id = %s")
-        values.append(campaign_id)
-    if internal_id is not None:
-        where_clauses.append("id = %s")
-        values.append(internal_id)
-        
-    if not where_clauses:
-        return None
-        
-    query = f"SELECT campaign_id, id, targeting FROM cronbid_campaigns WHERE {' OR '.join(where_clauses)}"
+    # 2. Store the container mapping (simulating DB insertion)
+    containers = _load_containers()
+    containers[new_container_id] = {
+        "name": request_data.name,
+        "platform": request_data.platform,
+        "created_at": str(os.path.getmtime(CONTAINER_STORE_FILE)) # Simple timestamp placeholder
+    }
+    _save_containers(containers)
     
-    pool = await Database.connect()
-    async with pool.acquire() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(query, values)
-            return await cur.fetchone()
+    # 3. Return the generated container ID (REQUIRED by AppsFlyer FAQ)
+    return {"container_id": new_container_id}
 
 # ====================================================================
-# 1. /Validate Endpoint (POST) - SECURED with verify_partner_api_key
+# 3. /Sync Endpoint (POST)
 # ====================================================================
 
-@router.post("/validate", dependencies=[Depends(verify_partner_api_key)], tags=["Audience Sync Integration"])
-async def validate_audience_connection(data: AudienceSyncInput): # Uses Pydantic for docs
-    """
-    Validates campaign existence by ID or campaign_id and returns specific audience targeting details.
+@router.post(
+    "/sync", 
+    dependencies=[Depends(verify_partner_api_key)],
+    summary="3. Initiate Audience Data Sync",
+    description="AppsFlyer calls this whenever an upload is initiated (daily or manual). The body contains the container_id and pre-signed AWS URLs for file download.",
+    response_model=AudienceSyncResponse,
+    status_code=200
+)
+async def sync_audience_data(
+    request_data: AudienceSyncRequest = Body(
+        ...,
+        example={
+            "container_id": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+            "url_adid_sha256": "https://audiencespull.appsflyer.com/{{PARTNER_PULL_KEY}}/file_1.csv?X-Amz...",
+            "url_email_sha256": "https://audiencespull.appsflyer.com/{{PARTNER_PULL_KEY}}/file_2.csv?X-Amz..."
+        }
+    )
+):
+    # 1. Check if the container ID exists (simple validation)
+    containers = _load_containers()
+    if request_data.container_id not in containers:
+        # NOTE: AppsFlyer FAQ doesn't specify an error code for bad container, 
+        # but 404 is appropriate for a resource not found.
+        raise HTTPException(status_code=404, detail=f"Container ID '{request_data.container_id}' not found.")
+
+    # 2. Log or initiate the file download process (cannot actually download files here)
+    urls_received = {k: v for k, v in request_data.model_dump().items() if k.startswith('url_') and v is not None}
     
-    No identifier is mandatory, but one is required to perform a database lookup.
-    """
-    try:
-        campaign_id = data.campaign_id
-        internal_id = data.id
-        
-        # Safely determine integer ID for DB query
-        safe_internal_id = None
-        if internal_id is not None:
-            try:
-                # Handle case where Pydantic parsed 'id' as str
-                safe_internal_id = int(internal_id)
-            except (ValueError, TypeError):
-                pass
-        
-        if not campaign_id and safe_internal_id is None:
-            return {
-                "success": True,
-                "message": "Connection validated. No campaign ID/ID provided for database check.",
-                "status": "No check performed"
-            }
-        
-        campaign_row = await get_campaign_details(campaign_id, safe_internal_id)
-        
-        if not campaign_row:
-             return {
-                "success": False,
-                "message": f"Validation failed: Campaign not found using identifier(s) provided.",
-                "validated_identifiers": {"campaign_id": campaign_id, "id": internal_id},
-                "status": "Invalid"
-             }
+    print(f"--- SYNC INITIATED for Container: {request_data.container_id} ---")
+    print(f"Audience Name: {containers.get(request_data.container_id, {}).get('name', 'N/A')}")
+    print(f"URLs to download: {json.dumps(urls_received, indent=2)}")
+    print("--- Download logic must be asynchronous and complete within 2 hours. ---")
 
-        # --- Extract Audience Targeting Details ---
-        try:
-            targeting_data = json.loads(campaign_row.get("targeting", "{}") or "{}")
-            audience_targeting = targeting_data.get("audienceTargeting", {}) if isinstance(targeting_data, dict) else {}
-        except json.JSONDecodeError:
-            audience_targeting = {}
-        
-        cron_status = audience_targeting.get("cronAudience", "Disabled")
-        create_enabled = bool(audience_targeting.get("createAudience"))
-        events = [a.get("event") for a in audience_targeting.get("uploadAudience", []) if a.get("event")]
-        
-        return {
-            "success": True,
-            "message": "Campaign validated successfully.",
-            "validated_identifiers": {"campaign_id": campaign_row["campaign_id"], "id": campaign_row["id"]},
-            "status": "Validated",
-            "audience_details": {
-                "cron_audience_status": cron_status,
-                "is_create_audience_enabled": create_enabled,
-                "tracked_events": list(set(events)), 
-                "uploaded_audience_details": audience_targeting.get("uploadAudience", [])
-            }
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Validation failed: Internal Error: {str(e)}"
-        )
-
-# ====================================================================
-# 2. /Create Endpoint (POST) - SECURED with verify_partner_api_key
-# ====================================================================
-
-@router.post("/create", dependencies=[Depends(verify_partner_api_key)], tags=["Audience Sync Integration"])
-async def create_audience_sync(data: AudienceSyncInput): # Uses Pydantic for docs
-    """
-    Audience Creation: Accepts any combination of inputs. Creates a new campaign-specific JSON file to store the payload.
-    """
-    try:
-        # 1. Determine the unique identifier for the sync file
-        campaign_id = data.campaign_id
-        internal_id = data.id
-        
-        # Use campaign_id > internal_id > generic ID for file naming (MANDATORY for file system)
-        identifier = campaign_id or str(internal_id) if internal_id is not None else f"sync-id-{uuid.uuid4().hex[:8]}"
-
-        # 2. Optionally check existence in DB (READ-ONLY)
-        if data.campaign_id or data.id is not None:
-             # Just ensures we don't proceed with a non-existent campaign, but not strictly required
-             await get_campaign_details(campaign_id=data.campaign_id, internal_id=data.id) 
-
-        # 3. Prepare the payload structure
-        sync_data = {
-            "file_identifier": identifier,
-            "created_at": datetime.utcnow().isoformat(),
-            "last_synced_at": datetime.utcnow().isoformat(),
-            "creation_data": {
-                "id_sent": data.id,
-                "campaign_id_sent": data.campaign_id,
-                "event_name": data.event_name,
-                "json_object_sent": data.json_object,
-                "custom_data_sent": data.custom_data
-            },
-            "sync_history": {
-                 f"create_{uuid.uuid4().hex[:6]}": {
-                     "timestamp": datetime.utcnow().isoformat(),
-                     "event": data.event_name or "generic_event",
-                     # Store the whole non-null input payload for maximum partner comfort
-                     "payload": data.dict(exclude_none=True) 
-                 }
-            }
-        }
-        
-        await write_sync_file(identifier, sync_data)
-        
-        return {
-            "success": True,
-            "message": "Audience sync file created successfully.",
-            "file_identifier": identifier,
-            "storage_location": get_sync_file_path(identifier)
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Audience creation failed: Internal Error: {str(e)}"
-        )
-
-
-# ====================================================================
-# 3. /Sync Endpoint (POST) - SECURED with verify_partner_api_key
-# ====================================================================
-
-@router.post("/sync", dependencies=[Depends(verify_partner_api_key)], tags=["Audience Sync Integration"])
-async def sync_audience_data(data: AudienceSyncInput): # Uses Pydantic for docs
-    """
-    Audience Sync: Performs an update operation on the existing campaign's JSON file. 
-    Requires 'id' or 'campaign_id' in the body to locate the file.
-    """
-    try:
-        campaign_id = data.campaign_id
-        internal_id = data.id
-        
-        # Determine the identifier for the sync file (MANDATORY for update)
-        identifier = campaign_id or str(internal_id) if internal_id is not None else None
-        
-        if not identifier:
-            raise HTTPException(status_code=400, detail="Synchronization requires either 'campaign_id' or 'id' in the JSON body to locate the existing sync file.")
-
-        # Check if the sync file exists (the primary validation for /sync)
-        current_data = await read_sync_file(identifier)
-        if not current_data:
-            raise HTTPException(status_code=404, detail=f"Sync file not found using identifier '{identifier}'. Please call the /create endpoint first.")
-            
-        # --- File Update Logic ---
-        
-        # 1. Update metadata
-        current_data["last_synced_at"] = datetime.utcnow().isoformat()
-        
-        # 2. Store the new payload in sync_history
-        timestamp_key = f"sync_{uuid.uuid4().hex[:6]}"
-        
-        current_data.setdefault("sync_history", {})[timestamp_key] = {
-            "timestamp": datetime.utcnow().isoformat(),
-            "event": data.event_name or "generic_event",
-            "payload": data.dict(exclude_none=True) # Store the whole non-null input payload
-        }
-
-        await write_sync_file(identifier, current_data)
-
-        return {
-            "success": True,
-            "message": "Audience data synchronized and file updated.",
-            "file_identifier": identifier,
-            "new_record_key": timestamp_key
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Audience sync failed: Internal Error: {str(e)}"
-        )
+    # 3. Return 200 OK immediately (REQUIRED by AppsFlyer FAQ)
+    return AudienceSyncResponse()
