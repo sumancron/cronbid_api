@@ -105,10 +105,3 @@ async def add_sources(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ✅ FIX: Add a fallback GET to avoid 405 when someone visits this route via browser
-@router.get("/add_sources/", include_in_schema=False)
-async def prevent_get_on_add_sources():
-    return JSONResponse(
-        status_code=405,
-        content={"detail": "Method Not Allowed. Use POST instead."}
-    )
