@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Response
 from pydantic import BaseModel, Field
 import json
 import os
@@ -379,3 +379,78 @@ async def sync_audience_data(request: Request):
 # NOTE: The dependency on validate_api_key has been removed from the function signature
 # and is not called inside the sync_audience_data body, fulfilling the requirement 
 # to bypass the 401 Unauthorized error completely.
+
+
+# Global constants needed by the function
+SYNC_DATA_DIR = "sync_data/partner_audiences"
+
+# --- Function to read the content of any JSON file ---
+def _read_file_content(file_path: str) -> Any:
+    """Safely reads JSON content or returns raw text."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        try:
+            # Try to parse as JSON first
+            return json.loads(content)
+        except json.JSONDecodeError:
+            # If not JSON, return as plain text
+            return content
+    except Exception as e:
+        return {"error": f"Failed to read file: {str(e)}"}
+
+# --- THE UNSECURED INTERNAL API ENDPOINT ---
+
+@router.get(
+    "/internal/data-viewer/{filename:path}",
+    summary="Unsecured File & Directory Viewer (DANGEROUS: Internal Use ONLY)",
+    description="Lists all files in the sync directory. If a filename is specified, returns its content. NO AUTHENTICATION REQUIRED.",
+    response_class=Response # Allow flexible response type (HTML or JSON)
+)
+async def unsecured_sync_data_viewer(filename: Optional[str] = None):
+    
+    # Base directory must be relative to the running script
+    if not os.path.exists(SYNC_DATA_DIR):
+        raise HTTPException(status_code=404, detail="Sync data directory not found.")
+
+    # --- Case 2: View specific file content ---
+    if filename:
+        # Sanitize path to prevent directory traversal attacks (though the whole API is unsecured)
+        # We ensure the file is strictly inside SYNC_DATA_DIR
+        file_path = os.path.normpath(os.path.join(SYNC_DATA_DIR, filename))
+        
+        # Check if the file path tries to escape the base directory
+        if not file_path.startswith(os.path.normpath(SYNC_DATA_DIR)):
+            raise HTTPException(status_code=400, detail="Invalid path access attempt.")
+        
+        if not os.path.isfile(file_path):
+            raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+        
+        content = _read_file_content(file_path)
+
+        # Return JSON if content is parsed as JSON, otherwise return plain text
+        if isinstance(content, dict) or isinstance(content, list):
+            return Response(content=json.dumps(content, indent=4), media_type="application/json")
+        else:
+            return Response(content=str(content), media_type="text/plain")
+            
+    # --- Case 1: List all files in the directory (Default view) ---
+    else:
+        try:
+            files = os.listdir(SYNC_DATA_DIR)
+            
+            # Create a simple HTML list view for browser compatibility
+            html_content = f"<html><head><title>Internal Sync Data Viewer</title></head><body>"
+            html_content += f"<h1>Contents of {SYNC_DATA_DIR}</h1><ul>"
+            
+            for file in sorted(files):
+                if os.path.isfile(os.path.join(SYNC_DATA_DIR, file)):
+                    # Link points back to this same API endpoint with the filename appended
+                    html_content += f'<li><a href="/internal/data-viewer/{file}">{file}</a></li>'
+            
+            html_content += "</ul></body></html>"
+            
+            return Response(content=html_content, media_type="text/html")
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to list directory contents: {str(e)}")
