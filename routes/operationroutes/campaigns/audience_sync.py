@@ -37,13 +37,16 @@ if not os.path.exists(CONTAINERS_FILE):
 # AUTH
 # =====================================================
 
-def verify_api_key(authorization: str = Header(...)):
+def verify_api_key(
+    authorization: str = Header(..., alias="Authorization")
+):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Bearer token")
 
     token = authorization.replace("Bearer ", "")
     if token != PARTNER_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
+
 
 # =====================================================
 # STORAGE HELPERS
