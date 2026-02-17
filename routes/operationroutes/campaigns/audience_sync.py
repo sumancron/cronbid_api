@@ -1299,10 +1299,17 @@ def _get_login_page() -> str:
 @router.get("/get-csv/{filename}")
 async def get_csv_data(filename: str):
     """Returns first 1,000 rows of CSV as JSON preview (memory-efficient)."""
+    # Security: prevent directory traversal
     if ".." in filename or "/" in filename or "\\" in filename:
         return {"error": "Invalid filename"}
 
-    filepath = os.path.join(CSV_STORAGE_DIR, filename)
+    # Construct full file path with absolute normalization
+    filepath = os.path.abspath(os.path.join(CSV_STORAGE_DIR, filename))
+    csv_storage_abs = os.path.abspath(CSV_STORAGE_DIR)
+    
+    # Ensure file path stays within csv_storage directory
+    if not filepath.startswith(csv_storage_abs):
+        return {"error": "Invalid file path"}
 
     if not os.path.isfile(filepath):
         return {"error": "File not found"}
@@ -1333,12 +1340,29 @@ async def get_csv_data(filename: str):
 @router.get("/download-csv/{filename}")
 async def download_csv_file(filename: str):
     """Streams full CSV file to user's computer (handles large files)."""
+    # Security: prevent directory traversal
     if ".." in filename or "/" in filename or "\\" in filename:
-        return {"error": "Invalid filename"}
-
-    filepath = os.path.join(CSV_STORAGE_DIR, filename)
-
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    
+    # Construct full file path
+    filepath = os.path.abspath(os.path.join(CSV_STORAGE_DIR, filename))
+    csv_storage_abs = os.path.abspath(CSV_STORAGE_DIR)
+    
+    # Ensure the file path is within csv_storage directory
+    if not filepath.startswith(csv_storage_abs):
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    
+    # Check if file exists
     if not os.path.isfile(filepath):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    return FileResponse(path=filepath, filename=filename, media_type="text/csv")
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+    
+    try:
+        # Return file with proper headers for download
+        return FileResponse(
+            path=filepath,
+            filename=filename,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
