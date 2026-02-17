@@ -21,11 +21,8 @@ PARTNER_PULL_KEY = "uerm7ilkmjw1ek"
 DASHBOARD_USERNAME = "filtercoffe"
 DASHBOARD_PASSWORD = "d0wn10ad9"
 
-# === ABSOLUTE PATHS (Works in both localhost and production) ===
-# Get the directory where this file is located, then navigate to project root
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SYNC_DATA_DIR = os.path.join(SCRIPT_DIR, "sync_data", "partner_audiences")
-CSV_STORAGE_DIR = os.path.join(SCRIPT_DIR, "csv_storage")
+SYNC_DATA_DIR = "sync_data/partner_audiences"
+CSV_STORAGE_DIR = "csv_storage"
 CONTAINER_STORE_FILE = os.path.join(SYNC_DATA_DIR, "containers.json")
 SYNC_HISTORY_FILE = os.path.join(SYNC_DATA_DIR, "sync_history.json")
 
@@ -1302,17 +1299,10 @@ def _get_login_page() -> str:
 @router.get("/get-csv/{filename}")
 async def get_csv_data(filename: str):
     """Returns first 1,000 rows of CSV as JSON preview (memory-efficient)."""
-    # Security: prevent directory traversal
     if ".." in filename or "/" in filename or "\\" in filename:
         return {"error": "Invalid filename"}
 
-    # Construct full file path with absolute normalization
-    filepath = os.path.abspath(os.path.join(CSV_STORAGE_DIR, filename))
-    csv_storage_abs = os.path.abspath(CSV_STORAGE_DIR)
-    
-    # Ensure file path stays within csv_storage directory
-    if not filepath.startswith(csv_storage_abs):
-        return {"error": "Invalid file path"}
+    filepath = os.path.join(CSV_STORAGE_DIR, filename)
 
     if not os.path.isfile(filepath):
         return {"error": "File not found"}
