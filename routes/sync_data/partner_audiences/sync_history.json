@@ -1,1 +1,32 @@
-[]
+[
+    {
+        "sync_id": "855ee71a-410f-4731-a968-14b4dea3bd6a",
+        "timestamp": "2026-02-16T11:13:00.804459",
+        "container_id": "6b75ffbc-2dff-494f-97f0-61dc3930547c",
+        "container_exists": true,
+        "status": "Partial",
+        "downloaded_files": [],
+        "errors": [
+            "email: HTTP 404"
+        ],
+        "total_rows_downloaded": 0,
+        "completed_at": "2026-02-16T11:13:00.827893"
+    },
+    {
+        "sync_id": "70561db3-92fd-48bb-ae0b-46cef32defd5",
+        "timestamp": "2026-02-16T15:25:51.301918",
+        "container_id": "4337cbf6-b1ee-44c9-b7b8-0d41c16fbc7a",
+        "container_exists": true,
+        "status": "Success",
+        "downloaded_files": [
+            {
+                "type": "adid",
+                "filename": "4337cbf6-b1ee-44c9-b7b8-0d41c16fbc7a_adid_20260216_152558.csv",
+                "rows": 2334045
+            }
+        ],
+        "errors": [],
+        "total_rows_downloaded": 2334045,
+        "completed_at": "2026-02-16T15:25:59.055031"
+    }
+]

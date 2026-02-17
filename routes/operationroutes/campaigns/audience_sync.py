@@ -183,12 +183,9 @@ async def process_sync_download(container_id: str, urls: Dict[str, str], sync_id
                             row_count = len(lines) - 1 if len(lines) > 0 else 0
                             total_rows_downloaded += row_count
 
-                            # Save CSV to storage using absolute path
+                            # Save CSV to storage
                             filename = f"{container_id}_{url_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                             filepath = os.path.join(CSV_STORAGE_DIR, filename)
-                            
-                            # Ensure directory exists
-                            os.makedirs(CSV_STORAGE_DIR, exist_ok=True)
 
                             with open(filepath, "w", encoding="utf-8") as f:
                                 f.write(content)
