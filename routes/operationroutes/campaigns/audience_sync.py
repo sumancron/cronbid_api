@@ -21,8 +21,11 @@ PARTNER_PULL_KEY = "uerm7ilkmjw1ek"
 DASHBOARD_USERNAME = "filtercoffe"
 DASHBOARD_PASSWORD = "d0wn10ad9"
 
-SYNC_DATA_DIR = "sync_data/partner_audiences"
-CSV_STORAGE_DIR = "csv_storage"
+# === ABSOLUTE PATHS (Works in both localhost and production) ===
+# Get the directory where this file is located, then navigate to project root
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+SYNC_DATA_DIR = os.path.join(SCRIPT_DIR, "sync_data", "partner_audiences")
+CSV_STORAGE_DIR = os.path.join(SCRIPT_DIR, "csv_storage")
 CONTAINER_STORE_FILE = os.path.join(SYNC_DATA_DIR, "containers.json")
 SYNC_HISTORY_FILE = os.path.join(SYNC_DATA_DIR, "sync_history.json")
 
@@ -180,9 +183,12 @@ async def process_sync_download(container_id: str, urls: Dict[str, str], sync_id
                             row_count = len(lines) - 1 if len(lines) > 0 else 0
                             total_rows_downloaded += row_count
 
-                            # Save CSV to storage
+                            # Save CSV to storage using absolute path
                             filename = f"{container_id}_{url_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                             filepath = os.path.join(CSV_STORAGE_DIR, filename)
+                            
+                            # Ensure directory exists
+                            os.makedirs(CSV_STORAGE_DIR, exist_ok=True)
 
                             with open(filepath, "w", encoding="utf-8") as f:
                                 f.write(content)
