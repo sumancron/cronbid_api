@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Body, Request, BackgroundTasks, Cookie
-from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 import json
 import os
@@ -21,8 +21,10 @@ PARTNER_PULL_KEY = "uerm7ilkmjw1ek"
 DASHBOARD_USERNAME = "filtercoffe"
 DASHBOARD_PASSWORD = "d0wn10ad9"
 
-SYNC_DATA_DIR = "sync_data/partner_audiences"
-CSV_STORAGE_DIR = "csv_storage"
+# === ABSOLUTE PATHS (Works in both localhost and production) ===
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+SYNC_DATA_DIR = os.path.join(SCRIPT_DIR, "sync_data", "partner_audiences")
+CSV_STORAGE_DIR = os.path.join(SCRIPT_DIR, "csv_storage")
 CONTAINER_STORE_FILE = os.path.join(SYNC_DATA_DIR, "containers.json")
 SYNC_HISTORY_FILE = os.path.join(SYNC_DATA_DIR, "sync_history.json")
 
@@ -1299,10 +1301,17 @@ def _get_login_page() -> str:
 @router.get("/get-csv/{filename}")
 async def get_csv_data(filename: str):
     """Returns first 1,000 rows of CSV as JSON preview (memory-efficient)."""
+    # Security: prevent directory traversal
     if ".." in filename or "/" in filename or "\\" in filename:
         return {"error": "Invalid filename"}
 
-    filepath = os.path.join(CSV_STORAGE_DIR, filename)
+    # Construct full file path with absolute normalization
+    filepath = os.path.abspath(os.path.join(CSV_STORAGE_DIR, filename))
+    csv_storage_abs = os.path.abspath(CSV_STORAGE_DIR)
+    
+    # Ensure file path stays within csv_storage directory
+    if not filepath.startswith(csv_storage_abs):
+        return {"error": "Invalid file path"}
 
     if not os.path.isfile(filepath):
         return {"error": "File not found"}
@@ -1332,16 +1341,16 @@ async def get_csv_data(filename: str):
 
 @router.get("/download-csv/{filename}")
 async def download_csv_file(filename: str):
-    """Streams full CSV file to user's computer (handles large files)."""
+    """Streams full CSV file to user's computer with chunked transfer (handles 200-500MB files)."""
     # Security: prevent directory traversal
     if ".." in filename or "/" in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="Invalid filename")
     
-    # Construct full file path
+    # Construct full file path with absolute normalization
     filepath = os.path.abspath(os.path.join(CSV_STORAGE_DIR, filename))
     csv_storage_abs = os.path.abspath(CSV_STORAGE_DIR)
     
-    # Ensure the file path is within csv_storage directory
+    # Ensure the file path is within csv_storage directory (prevent path traversal)
     if not filepath.startswith(csv_storage_abs):
         raise HTTPException(status_code=400, detail="Invalid file path")
     
@@ -1350,12 +1359,30 @@ async def download_csv_file(filename: str):
         raise HTTPException(status_code=404, detail=f"File not found: {filename}")
     
     try:
-        # Return file with proper headers for download
-        return FileResponse(
-            path=filepath,
-            filename=filename,
+        # Get file size for Content-Length header
+        file_size = os.path.getsize(filepath)
+        
+        # Stream file in chunks to prevent memory exhaustion
+        async def stream_file():
+            chunk_size = 1024 * 1024  # 1 MB chunks
+            with open(filepath, "rb") as f:
+                while True:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+                    yield chunk
+        
+        # Return streaming response with proper headers for download
+        return StreamingResponse(
+            stream_file(),
             media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(file_size),
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error downloading file: {str(e)}")
