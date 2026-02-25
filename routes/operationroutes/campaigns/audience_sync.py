@@ -1035,8 +1035,7 @@ def _render_sync_history_table(sync_history: List[Dict]) -> str:
         status_class = f"status-{status.lower()}"
 
         timestamp = entry.get("timestamp", "N/A")
-        if "T" in str(timestamp):
-            timestamp = timestamp.split("T")[1][:5]  # HH:MM format
+
 
         container_id = entry.get("container_id", "N/A")
         if container_id != "N/A":
