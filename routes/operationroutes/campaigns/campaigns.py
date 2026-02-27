@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from database import Database
-from auth import verify_api_key
+from auth import double_key
 import aiomysql
 from typing import Optional, List
 import json
@@ -17,14 +17,15 @@ UPLOADS_DIR = os.getenv("UPLOADS_DIR", "uploads/campaignsmedia") # Fallback to a
 
 router = APIRouter()
 
-@router.get("/get_campaigns/", dependencies=[Depends(verify_api_key)])
+@router.get("/get_campaigns/")
 async def get_campaigns(
     campaign_id: Optional[str] = Query(None),
     brand: Optional[str] = Query(None),
     campaign_title: Optional[str] = Query(None),
     country: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
-    created_by: Optional[str] = Query(None)
+    created_by: Optional[str] = Query(None),
+    auth_key: int = Depends(double_key)
 ):
     try:
         filters = []
@@ -58,6 +59,14 @@ async def get_campaigns(
             async with conn.cursor(aiomysql.DictCursor) as cur:
                 await cur.execute(query, values)
                 rows = await cur.fetchall()
+
+        # Filter based on conversion_flow and auth_key
+        if auth_key == 1:
+            # Only keep campaigns with "install" in conversion_flow
+            rows = [row for row in rows if row.get("conversion_flow") and "install" in row.get("conversion_flow")]
+        elif auth_key == 2:
+            # Only keep campaigns without "install" in conversion_flow
+            rows = [row for row in rows if not (row.get("conversion_flow") and "install" in row.get("conversion_flow"))]
 
         # Define the default simplified structure: [{"country": null, "excludedStates": [], "includedStates": []}]
         DEFAULT_TARGETING = [{"country": None, "excludedStates": [], "includedStates": []}]
