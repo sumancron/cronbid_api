@@ -78,6 +78,14 @@ async def get_campaigns(
                     cf = json.loads(row["conversion_flow"])
                     if isinstance(cf, dict) and "amount" in cf:
                         cf["payout"] = cf["amount"]
+                        
+                        # For auth_key == 2, replace event IDs with event names
+                        if auth_key == 2 and "events" in cf:
+                            if isinstance(cf["events"], list):
+                                for event in cf["events"]:
+                                    if isinstance(event, dict) and "name" in event:
+                                        event["id"] = event["name"]
+                        
                         row["conversion_flow"] = json.dumps(cf)
                 except json.JSONDecodeError:
                     pass
