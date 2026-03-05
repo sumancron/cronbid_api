@@ -1,0 +1,516 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Affise API 3.1 · complete reference</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f3f8;
+            color: #1e293b;
+            line-height: 1.5;
+        }
+        /* main grid with fixed header + sticky sidebar + scrollable content */
+        .app-layout {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+            overflow: hidden;
+        }
+        /* top bar — permanently sticky */
+        .top-bar {
+            background: #0b1f33;
+            color: white;
+            padding: 0.9rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #1e3a5f;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+            z-index: 30;
+            grid-row: 1;
+        }
+        .top-bar h1 {
+            font-size: 1.7rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .top-bar h1 span {
+            background: #2b4f8e;
+            padding: 0.2rem 0.8rem;
+            border-radius: 40px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .top-bar .api-badge {
+            background: #1e3a5f;
+            color: #a5c9ff;
+            padding: 0.4rem 1rem;
+            border-radius: 40px;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        /* content row: sidebar + main */
+        .docs-row {
+            display: flex;
+            overflow: hidden;
+            grid-row: 2;
+        }
+        /* sidebar — sticky within the row (no extra scroll outside) */
+        .sidebar {
+            width: 300px;
+            background: #f9fcff;
+            border-right: 1px solid #dde3ea;
+            padding: 1.5rem 0.8rem 2rem 1rem;
+            overflow-y: auto;
+            flex-shrink: 0;
+            height: 100%;
+            scrollbar-width: thin;
+            position: sticky;
+            top: 0;
+            align-self: start;
+        }
+        .sidebar h2 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #54708f;
+            margin: 1.6rem 0 0.3rem 0;
+            padding-left: 0.5rem;
+        }
+        .sidebar h2:first-of-type {
+            margin-top: 0;
+        }
+        .sidebar ul {
+            list-style: none;
+        }
+        .sidebar li {
+            margin-bottom: 0.2rem;
+        }
+        .sidebar a {
+            display: block;
+            padding: 0.4rem 1rem 0.4rem 1.5rem;
+            border-radius: 8px;
+            color: #1e3a5f;
+            font-size: 0.9rem;
+            font-weight: 450;
+            text-decoration: none;
+            transition: 0.15s;
+            border-left: 3px solid transparent;
+        }
+        .sidebar a:hover {
+            background: #e1edfc;
+            color: #0f2b45;
+            border-left-color: #2b6ed7;
+        }
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem 2.5rem 4rem;
+            background: white;
+        }
+        /* anchor offset for sticky header */
+        .section-block {
+            scroll-margin-top: 80px;
+            margin-bottom: 3.5rem;
+            border-bottom: 1px solid #ecf1f7;
+            padding-bottom: 2rem;
+        }
+        .section-title {
+            font-size: 2rem;
+            font-weight: 650;
+            letter-spacing: -0.01em;
+            margin: 0 0 0.5rem 0;
+            color: #0b1f33;
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+        }
+        .section-title .badge {
+            background: #e0ebf9;
+            color: #1e4b7c;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.2rem 0.9rem;
+            border-radius: 30px;
+        }
+        .section-desc {
+            color: #3a5670;
+            margin-bottom: 2rem;
+            font-size: 1.05rem;
+        }
+        .method-card {
+            background: #f9fcff;
+            border-radius: 22px;
+            padding: 1.8rem;
+            margin: 2rem 0 1.8rem;
+            border: 1px solid #e6ecf3;
+            box-shadow: 0 6px 12px -8px rgba(0,32,64,0.08);
+        }
+        .method-card h4 {
+            font-size: 1.4rem;
+            font-weight: 620;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 1.2rem;
+            color: #0c4a6e;
+        }
+        .endpoint-display {
+            background: #0b1f33;
+            color: #b9e0f7;
+            padding: 0.9rem 1.4rem;
+            border-radius: 16px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.95rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 1rem 0;
+            border: 1px solid #284b6b;
+        }
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            background: white;
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,20,40,0.02);
+            margin: 1.2rem 0;
+        }
+        .param-table th {
+            background: #e9f0f8;
+            font-weight: 600;
+            color: #1e3a5f;
+            padding: 0.7rem 1rem;
+            text-align: left;
+        }
+        .param-table td {
+            padding: 0.7rem 1rem;
+            border-bottom: 1px solid #e2e9f2;
+            vertical-align: top;
+        }
+        .param-table tr:last-child td { border-bottom: none; }
+        .required-badge {
+            color: #b91c1c;
+            background: #ffe5e5;
+            padding: 0.2rem 0.6rem;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        .code-sample {
+            background: #1e2a3a;
+            color: #e3eaf1;
+            padding: 1.2rem;
+            border-radius: 18px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            margin: 1.2rem 0;
+            border: 1px solid #2f4057;
+        }
+        .response-example {
+            background: #f2f8ff;
+            border-left: 5px solid #1f69c9;
+            padding: 1rem 1.6rem;
+            border-radius: 14px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 0.85rem;
+            margin: 1rem 0;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+        .note-box {
+            background: #fff7e5;
+            border-left: 4px solid #f1a23d;
+            padding: 1rem 1.8rem;
+            border-radius: 14px;
+            margin: 1.2rem 0;
+        }
+        hr { border: 1px solid #e2e8f0; margin: 2rem 0; }
+        .badge-method {
+            background: #1f69c9;
+            color: white;
+            font-weight: 600;
+            padding: 0.25rem 1.1rem;
+            border-radius: 40px;
+            font-size: 0.8rem;
+        }
+        @media (max-width: 900px) {
+            .docs-row { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; position: relative; }
+            .main-content { padding: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="app-layout">
+    <div class="top-bar">
+        <h1>📘 Affise API 3.1 <span>complete</span></h1>
+        <div class="api-badge">API‑Key · always required</div>
+    </div>
+    <div class="docs-row">
+        <nav class="sidebar">
+            <h2>📌 basics</h2>
+            <ul><li><a href="#introduction">Introduction</a></li><li><a href="#authorization">Authorization</a></li></ul>
+            <h2>📊 statistics</h2>
+            <ul><li><a href="#statistics">Custom, conversions, clicks</a></li><li><a href="#stats-advanced">By sub / offer / managers</a></li></ul>
+            <h2>🤝 affiliate</h2>
+            <ul><li><a href="#affiliate-methods">Partner methods (me, offers, postbacks)</a></li></ul>
+            <h2>📢 advertiser</h2>
+            <ul><li><a href="#advertiser-methods">Registration, offers, login</a></li></ul>
+            <h2>📦 offers</h2>
+            <ul><li><a href="#offers">Offers list, by id, categories</a></li></ul>
+            <h2>⚙️ admin: advertiser</h2>
+            <ul><li><a href="#advertiser-managing">Manage advertisers</a></li><li><a href="#advertiser-billing">Advertiser billing</a></li></ul>
+            <h2>📌 admin: offers</h2>
+            <ul><li><a href="#offer-managing">Offers (add, edit, caps, targeting)</a></li></ul>
+            <h2>👥 admin: affiliates</h2>
+            <ul><li><a href="#affiliate-managing">Affiliate managing</a></li></ul>
+            <h2>🧑‍💼 admin: users</h2>
+            <ul><li><a href="#user-managing">Users & permissions</a></li></ul>
+            <h2>🔄 conversions</h2>
+            <ul><li><a href="#conversions-managing">Conversions (edit/import)</a></li></ul>
+            <h2>🛠️ other admin</h2>
+            <ul><li><a href="#other-admin">Cities, currencies, tickets, smartlinks</a></li></ul>
+            <h2>📐 presets</h2>
+            <ul><li><a href="#presets">Presets (admin)</a></li></ul>
+            <h2>🤖 automation</h2>
+            <ul><li><a href="#automation">KPI automation, logs</a></li></ul>
+            <h2>💰 ad costs</h2>
+            <ul><li><a href="#adcosts">Ad costs (CRUD)</a></li></ul>
+            <h2>🌐 other lists</h2>
+            <ul><li><a href="#other-managing">ISP, countries, os, vendors</a></li></ul>
+            <h2>🔁 status codes</h2>
+            <ul><li><a href="#status-codes">Status codes</a></li></ul>
+            <h2>💳 billing API</h2>
+            <ul><li><a href="#billing-api">Payments, invoices, corrections</a></li></ul>
+        </nav>
+        <main class="main-content">
+            <!-- INTRODUCTION -->
+            <section id="introduction" class="section-block">
+                <h2 class="section-title">🔰 Introduction <span class="badge">v3.1</span></h2>
+                <p class="section-desc">API 3.1 documentation. All requests require an <code>API-Key</code> header or GET parameter. Your API domain, key and personal affiliate key are available in your profile.</p>
+            </section>
+            <!-- AUTHORIZATION -->
+            <section id="authorization" class="section-block">
+                <h2 class="section-title">🔑 Authorization</h2>
+                <div class="code-sample">curl --header "API-Key:23df424b0a53b0899f78685966243ee61" http://YOUR_API_DOMAIN/</div>
+                <div class="code-sample">curl http://YOUR_API_DOMAIN/some_path?API-Key=23df424b0a53b0899f78685966243ee61</div>
+                <div class="note-box"><strong>All API requests must include an API-Key header or API-Key GET parameter.</strong></div>
+            </section>
+            <!-- STATISTICS main -->
+            <section id="statistics" class="section-block">
+                <h2 class="section-title">📈 Statistics</h2>
+                <div class="method-card">
+                    <h4><span class="badge-method">GET</span> Custom stats <code>/3.0/stats/custom</code></h4>
+                    <div class="endpoint-display">curl --header "API-Key:..." "http://YOUR_API_DOMAIN/3.0/stats/custom?slice[]=year&slice[]=month&filter[date_from]=2017-03-01&filter[date_to]=2017-03-01&conversionTypes[]=total&conversionTypes[]=confirmed"</div>
+                    <div class="response-example">{"status":1,"stats":[{"slice":{"year":2017,"month":3,"day":1},"traffic":{"raw":"1607530","uniq":"1468939"},"actions":{...}}],"pagination":{...}}</div>
+                    <table class="param-table"><tr><th>Parameter</th><th>Description</th></tr><tr><td>slice[]</td><td>required: year,month,day,offer,country,os,device,sub1…</td></tr><tr><td>filter[date_from]</td><td>required YYYY-MM-DD</td></tr><tr><td>filter[date_to]</td><td>required</td></tr><tr><td>conversionTypes</td><td>total,confirmed,pending,declined,hold</td></tr></table>
+                </div>
+                <div class="method-card"><h4><span class="badge-method">GET</span> Conversions by ID <code>/3.0/stats/conversionsbyid?id={id}</code></h4><div class="response-example">{ "conversion": { "id":"...", "status":1, "offer":{...} } }</div></div>
+                <div class="method-card"><h4><span class="badge-method">GET</span> Conversions list <code>/3.0/stats/conversions</code></h4><p>Filters: date_from, date_to, status, offer, country, device, payouts, fraud, sub1-5, custom fields ...</p></div>
+                <div class="method-card"><h4><span class="badge-method">GET</span> Clicks <code>/3.0/stats/clicks</code> (admin)</h4></div>
+                <div class="method-card"><h4><span class="badge-method">GET</span> By date / by hour <code>/3.0/stats/getbydate</code> <code>/getbyhour</code></h4></div>
+            </section>
+            <!-- advanced stats -->
+            <section id="stats-advanced" class="section-block">
+                <h2 class="section-title">🔎 Statistics by sub/offer/advertiser/managers</h2>
+                <div class="grid-2">
+                    <div class="method-card"><h4>By sub (partner) <code>/3.0/stats/getbysub</code></h4></div>
+                    <div class="method-card"><h4>By offer <code>/3.0/stats/getbyprogram</code></h4></div>
+                    <div class="method-card"><h4>By advertiser (admin) <code>/getbyadvertiser</code></h4></div>
+                    <div class="method-card"><h4>By account managers (admin) <code>/getbyaccountmanager</code></h4></div>
+                    <div class="method-card"><h4>By affiliate managers <code>/getbyaffiliatemanager</code></h4></div>
+                    <div class="method-card"><h4>By affiliate <code>/stats/getbypartner</code></h4></div>
+                    <div class="method-card"><h4>By country / browser / landing / prelanding / mobile carrier / os / device / goal / city (all have dedicated endpoints)</h4></div>
+                </div>
+                <div class="method-card"><h4>Retention rate & time-to-action</h4><p><code>/3.0/stats/retentionrate</code> and <code>/3.0/stats/time-to-action</code></p></div>
+            </section>
+            <!-- AFFILIATE METHODS -->
+            <section id="affiliate-methods" class="section-block">
+                <h2 class="section-title">🤝 Affiliate methods</h2>
+                <div class="method-card"><h4>GET <code>/3.1/partner/me</code></h4><p>own profile, balance, permissions</p></div>
+                <div class="method-card"><h4>GET <code>/3.0/partner/offers</code> , <code>/live-offers</code></h4><p>available offers with caps, targeting, payments</p></div>
+                <div class="method-card"><h4>POST <code>/3.0/partner/activation/offer</code> (offer_id, comment)</h4></div>
+                <div class="method-card"><h4>Promocodes <code>/3.1/offers/promocodes</code> (GET)</h4></div>
+                <div class="method-card"><h4>Postbacks CRUD <code>/3.0/partner/postback</code> (add, edit, delete, list)</h4></div>
+                <div class="method-card"><h4>Pixels <code>/3.0/partner/pixels</code> (list/add/edit/remove)</h4></div>
+                <div class="method-card"><h4>GET <code>/3.0/balance</code> – affiliate balance</h4></div>
+                <div class="method-card"><h4>SmartLink categories <code>/3.0/partner/smartlink/categories</code></h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/partner/api-key</code> – rotate own key</h4></div>
+                <div class="method-card"><h4>Import conversions <code>/4.0/affiliate/conversion/import</code> (single/multiple)</h4></div>
+                <div class="method-card"><h4>GET product feed <code>/3.1/product-feed/{product_feed_id}/items</code></h4></div>
+            </section>
+            <!-- ADVERTISER METHODS -->
+            <section id="advertiser-methods" class="section-block">
+                <h2 class="section-title">📢 Advertiser methods</h2>
+                <div class="method-card"><h4>POST <code>/3.1/advertiser/registration</code> (title, email, password)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/advertiser/login</code> – get api_key + tokens</h4></div>
+                <div class="method-card"><h4>GET <code>/3.1/advertiser/offers</code> – list own offers</h4></div>
+                <div class="method-card"><h4>GET <code>/3.1/advertiser/offers/{id}</code></h4></div>
+            </section>
+            <!-- OFFERS general -->
+            <section id="offers" class="section-block">
+                <h2 class="section-title">📦 Offers & categories</h2>
+                <div class="method-card"><h4>GET <code>/3.0/offers</code> – filter by q, int_id, countries, os, caps, sort</h4></div>
+                <div class="method-card"><h4>GET <code>/3.0/offer/{id}</code> – full info (payouts, targeting, caps, tiers)</h4></div>
+                <div class="method-card"><h4>GET <code>/3.0/offer/categories</code></h4></div>
+            </section>
+            <!-- ADVERTISER MANAGING (admin) -->
+            <section id="advertiser-managing" class="section-block">
+                <h2 class="section-title">⚙️ Advertiser managing (admin)</h2>
+                <div class="method-card"><h4>GET <code>/3.0/admin/advertiser/{id}</code></h4></div>
+                <div class="method-card"><h4>GET <code>/3.0/admin/advertisers</code> (list)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/advertiser</code> – create (title, contact, manager, email, password…)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/advertiser/{id}</code> – edit</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/advertiser/{id}/sendpass</code></h4></div>
+                <div class="method-card"><h4>enable/disable affiliate for advertisers <code>/admin/advertiser/enable-affiliate</code></h4></div>
+            </section>
+            <!-- ADVERTISER BILLING -->
+            <section id="advertiser-billing" class="section-block">
+                <h2 class="section-title">💵 Advertiser billing (admin)</h2>
+                <div class="method-card"><h4>GET <code>/3.0/admin/advertiser-invoices</code> (list)</h4></div>
+                <div class="method-card"><h4>GET <code>/3.0/admin/advertiser-invoice/{number}</code></h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/advertiser-invoice</code> – create invoice</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/advertiser-invoice/{number}</code> – edit</h4></div>
+            </section>
+            <!-- OFFER MANAGING (admin) -->
+            <section id="offer-managing" class="section-block">
+                <h2 class="section-title">📌 Offer managing (admin)</h2>
+                <div class="method-card"><h4>GET <code>/3.0/offers/count</code> – count active</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/offer</code> – add (title, advertiser, url, payments, caps, targeting, schedule...)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/offer/{id}</code> – edit</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/offer/delete</code></h4></div>
+                <div class="method-card"><h4>GET <code>/3.1/offers/{id}/privacy</code> – enabled/disabled affiliates</h4></div>
+                <div class="method-card"><h4>Sources & categories CRUD <code>/3.0/admin/offer/sources</code> <code>/admin/category</code></h4></div>
+                <div class="method-card"><h4>Enable/disable affiliate on offer <code>/3.0/offer/enable-affiliate</code></h4></div>
+                <div class="method-card"><h4>Mass update <code>/3.0/admin/offer/mass-update</code></h4></div>
+                <div class="method-card"><h4>Remove creative / edit html creative</h4></div>
+                <div class="method-card"><h4>Promocodes bulk creation <code>/3.1/offers/promocodes/bulk</code></h4></div>
+            </section>
+            <!-- AFFILIATE MANAGING (admin) -->
+            <section id="affiliate-managing" class="section-block">
+                <h2 class="section-title">👥 Affiliate managing (admin)</h2>
+                <div class="method-card"><h4>GET <code>/3.0/admin/partner/{id}</code></h4></div>
+                <div class="method-card"><h4>GET <code>/3.0/admin/partners</code> (filter)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/partner</code> – create (email, password, country, payment_systems, custom_fields, sub_accounts)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/partner/{id}</code> – edit</h4></div>
+                <div class="method-card"><h4>Mass update <code>/3.0/admin/partners/mass-update</code></h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/partner/password/{id}</code></h4></div>
+                <div class="method-card"><h4>Partner postbacks list (admin) <code>/3.0/admin/postbacks</code></h4></div>
+                <div class="method-card"><h4>Update locale <code>/3.0/admin/partner/{id}/locale</code></h4></div>
+                <div class="method-card"><h4>Get referrals <code>/3.0/admin/partner/{id}/referrals</code></h4></div>
+                <div class="method-card"><h4>Check affiliate login <code>/3.1/partner/auth</code></h4></div>
+            </section>
+            <!-- USER MANAGING (admin) -->
+            <section id="user-managing" class="section-block">
+                <h2 class="section-title">🧑‍💼 User managing (admin)</h2>
+                <div class="method-card"><h4>GET <code>/3.0/admin/users</code></h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/user</code> – add (email, password, roles, type, first/last name)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/user/{id}</code> – edit</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/user/api_key/{id}</code> – rotate key</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/user/{id}/password</code></h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/user/{id}/permissions</code> – granular permissions</h4></div>
+                <div class="method-card"><h4>Public auth <code>/3.1/pub-auth</code> (email+pass → api_key)</h4></div>
+            </section>
+            <!-- CONVERSIONS MANAGING -->
+            <section id="conversions-managing" class="section-block">
+                <h2 class="section-title">🔄 Conversions managing</h2>
+                <div class="method-card"><h4>POST <code>/3.0/admin/conversion/edit</code> (ids, status, currency, payouts, revenue, comment)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/conversion/edit-by-advertiser</code> (with advertiser_id)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/conversion/import</code> (single)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.0/admin/conversions/import</code> (multiple)</h4></div>
+            </section>
+            <!-- OTHER ADMIN METHODS -->
+            <section id="other-admin" class="section-block">
+                <h2 class="section-title">🛠️ Other admin methods</h2>
+                <div class="method-card"><h4>City list <code>/3.1/cities</code></h4></div>
+                <div class="method-card"><h4>Devices list <code>/3.1/devices</code></h4></div>
+                <div class="method-card"><h4>Browsers list <code>/3.1/browsers</code></h4></div>
+                <div class="method-card"><h4>Currencies <code>/3.0/admin/currency</code></h4></div>
+                <div class="method-card"><h4>Payment systems <code>/3.0/admin/payment_systems</code></h4></div>
+                <div class="method-card"><h4>Custom fields <code>/3.0/admin/custom_fields</code></h4></div>
+                <div class="method-card"><h4>Domains <code>/3.0/admin/domains</code></h4></div>
+                <div class="method-card"><h4>Tickets <code>/3.0/admin/ticket/{id}</code> , list, approve/reject</h4></div>
+                <div class="method-card"><h4>Pixels admin <code>/3.0/partner/pixels?pid[]=...</code></h4></div>
+                <div class="method-card"><h4>SmartLink categories admin <code>/3.0/admin/smartlink/categories</code> (CRUD)</h4></div>
+            </section>
+            <!-- PRESETS -->
+            <section id="presets" class="section-block">
+                <h2 class="section-title">📐 Presets (admin)</h2>
+                <div class="method-card"><h4>GET <code>/3.1/presets</code></h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/presets</code> – create (name, permissions JSON, type)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/presets/{preset_id}</code> – update</h4></div>
+                <div class="method-card"><h4>DELETE <code>/3.1/presets/{preset_id}</code></h4></div>
+            </section>
+            <!-- AUTOMATION -->
+            <section id="automation" class="section-block">
+                <h2 class="section-title">🤖 Automation (admin)</h2>
+                <div class="method-card"><h4>KPI automation list <code>/3.1/automation/kpi</code></h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/automation/kpi</code> – create (offers, action_type, period, sub, goal1, goal2, kpi, notify_manager)</h4></div>
+                <div class="method-card"><h4>POST / DELETE edit/remove</h4></div>
+                <div class="method-card"><h4>Change logs <code>/3.1/automation/kpi/change-logs</code></h4></div>
+                <div class="method-card"><h4>Block logs <code>/3.1/automation/kpi/block-logs</code> , <code>/cr-and-sub/block-logs</code></h4></div>
+            </section>
+            <!-- AD COSTS -->
+            <section id="adcosts" class="section-block">
+                <h2 class="section-title">💰 Ad Costs (admin)</h2>
+                <div class="method-card"><h4>GET <code>/3.1/adcosts?offer_id=...</code></h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/adcosts</code> – create/update (offer_id, affiliate_id, date, sub8, costs)</h4></div>
+                <div class="method-card"><h4>DELETE <code>/3.1/adcosts</code></h4></div>
+            </section>
+            <!-- OTHER MANAGING (lists) -->
+            <section id="other-managing" class="section-block">
+                <h2 class="section-title">🌐 Other lists (ISP, countries, regions, OS, vendors...)</h2>
+                <div class="method-card"><h4>ISP <code>/3.1/isp?country=KZ</code></h4></div>
+                <div class="method-card"><h4>Countries <code>/3.1/countries</code></h4></div>
+                <div class="method-card"><h4>Regions <code>/3.1/regions?country[]=US</code></h4></div>
+                <div class="method-card"><h4>Cities <code>/3.1/cities</code></h4></div>
+                <div class="method-card"><h4>Connection types <code>/3.1/connection-types</code></h4></div>
+                <div class="method-card"><h4>Vendors <code>/3.1/vendors?q=...</code></h4></div>
+                <div class="method-card"><h4>OSes <code>/3.1/oses</code> and versions <code>/3.1/oses/{os}</code></h4></div>
+                <div class="method-card"><h4>Goals <code>/3.0/goals</code></h4></div>
+            </section>
+            <!-- STATUS CODES -->
+            <section id="status-codes" class="section-block">
+                <h2 class="section-title">🔁 Status codes</h2>
+                <ul style="padding:1rem 2rem;"><li>400 – Bad request</li><li>401 – Token is necessary</li><li>403 – Auth denied</li><li>404 – Resource not found</li><li>500 – Server error</li><li>501 – Request uri not found</li><li>502 – Bad gateway</li></ul>
+            </section>
+            <!-- BILLING API -->
+            <section id="billing-api" class="section-block">
+                <h2 class="section-title">💳 Billing API</h2>
+                <div class="method-card"><h4>GET <code>/3.1/payments</code> (date_from, date_to, filters)</h4></div>
+                <div class="method-card"><h4>GET <code>/3.1/payments/{id}</code></h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/payments/create-for-affiliate</code> (aid, sum, currency, note)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/payments/generate</code> (date, include/exclude, offer_ids...)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/payments/{id}</code> – update (payment_account, status, comment)</h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/payments/{id}/add-correction</code></h4></div>
+                <div class="method-card"><h4>DELETE <code>/3.1/payments/del-correction/{id}</code></h4></div>
+                <div class="method-card"><h4>DELETE <code>/3.1/payments/delete/{id}</code> and bulk delete <code>/bulk-delete</code></h4></div>
+                <div class="method-card"><h4>POST <code>/3.1/payments/{invoice_id}/conversions/delete</code></h4></div>
+            </section>
+            <hr>
+            
+        </main>
+    </div>
+</div>
+</body>
+</html>

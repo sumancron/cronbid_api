@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from routes import include_all_routes
@@ -37,3 +38,8 @@ app.mount("/campaignsmedia", StaticFiles(directory="uploads/campaignsmedia"), na
 @app.get("/")
 async def read_root():
     return {"Hello": "World"}
+
+@app.get("/sourcedocs", response_class=HTMLResponse)
+async def read_root():
+    with open("docs.html", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
